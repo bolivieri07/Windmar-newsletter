@@ -1,4 +1,5 @@
-"use client"
+const fs = require("fs");
+const page = `"use client"
 import { useEffect, useState } from "react"
 import { createClient } from "@/lib/supabase/client"
 
@@ -193,9 +194,9 @@ export default function Home() {
             <div className="hero-name">Solar Academy</div>
             <div className="hero-sub">We Train You. We Value You. We Promote You.</div>
             <div className="hero-stats">
-              <div className="hero-stat"><div className="hero-stat-val">{posts.length || "ï¿½"}</div><div className="hero-stat-lbl">Updates</div></div>
-              <div className="hero-stat"><div className="hero-stat-val">{events.length || "ï¿½"}</div><div className="hero-stat-lbl">Events</div></div>
-              <div className="hero-stat"><div className="hero-stat-val">{giveaways.length || "ï¿½"}</div><div className="hero-stat-lbl">Spiffs</div></div>
+              <div className="hero-stat"><div className="hero-stat-val">{posts.length || "—"}</div><div className="hero-stat-lbl">Updates</div></div>
+              <div className="hero-stat"><div className="hero-stat-val">{events.length || "—"}</div><div className="hero-stat-lbl">Events</div></div>
+              <div className="hero-stat"><div className="hero-stat-val">{giveaways.length || "—"}</div><div className="hero-stat-lbl">Spiffs</div></div>
             </div>
           </div>
 
@@ -214,7 +215,7 @@ export default function Home() {
           {loading ? (
             <div className="loading-card">Loading updates...</div>
           ) : recentPosts.length === 0 ? (
-            <div className="loading-card">No posts yet ï¿½ check back soon!</div>
+            <div className="loading-card">No posts yet — check back soon!</div>
           ) : (
             recentPosts.map(post => <FeedCard key={post.id} post={post} />)
           )}
@@ -388,3 +389,6 @@ export default function Home() {
     </div>
   )
 }
+`;
+fs.writeFileSync("src/app/page.tsx", page, "utf8");
+console.log("done - page.tsx rewritten cleanly");
