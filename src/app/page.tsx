@@ -204,7 +204,7 @@ export default function Home() {
                       style={{padding:"0.8rem 1.5rem",background:"#f89b24",color:"white",border:"none",borderRadius:8,fontWeight:700,fontSize:"0.95rem",cursor:"pointer",fontFamily:"Barlow,system-ui,sans-serif"}}>
                       View Latest Updates
                     </button>
-                    <a href="https://windmarsolaracademy.com/courses" target="_blank" rel="noreferrer"
+                    <a href="https://ettrenv5nd46gqbz5a9e.app.clientclub.net/login" target="_blank" rel="noreferrer"
                       style={{padding:"0.8rem 1.5rem",background:"rgba(255,255,255,0.15)",color:"white",border:"1px solid rgba(255,255,255,0.3)",borderRadius:8,fontWeight:700,fontSize:"0.95rem",textDecoration:"none"}}>
                       Training Videos
                     </a>
@@ -350,7 +350,7 @@ export default function Home() {
                 <p style={{fontSize:"0.95rem",color:"#6b7280",marginBottom:"1.5rem",lineHeight:1.6,maxWidth:500,margin:"0 auto 1.5rem"}}>
                   All Solar Academy training videos, modules, and courses are hosted on the Academy platform. Your GHL membership gives you full access.
                 </p>
-                <a href="https://windmarsolaracademy.com/courses" target="_blank" rel="noreferrer"
+                <a href="https://ettrenv5nd46gqbz5a9e.app.clientclub.net/login" target="_blank" rel="noreferrer"
                   style={{display:"inline-block",background:"#f89b24",color:"white",padding:"1rem 2.5rem",borderRadius:8,fontWeight:700,fontSize:"1.05rem",textDecoration:"none"}}>
                   Open Training Videos ?
                 </a>
@@ -362,7 +362,7 @@ export default function Home() {
                 {label:"Compliance",desc:"NABCEP, permits, regulatory requirements"},
                 {label:"Leadership",desc:"Team management, coaching, culture"},
               ].map((item,i) => (
-                <a key={i} href="https://windmarsolaracademy.com/courses" target="_blank" rel="noreferrer"
+                <a key={i} href="https://ettrenv5nd46gqbz5a9e.app.clientclub.net/login" target="_blank" rel="noreferrer"
                   style={{background:"white",borderRadius:14,padding:"1.5rem",boxShadow:"0 2px 12px rgba(0,0,0,0.08)",border:"1px solid #f3f4f6",textDecoration:"none",display:"block",transition:"transform 0.2s"}}
                   onMouseEnter={(e:any)=>e.currentTarget.style.transform="translateY(-2px)"}
                   onMouseLeave={(e:any)=>e.currentTarget.style.transform="translateY(0)"}>
@@ -440,7 +440,7 @@ export default function Home() {
                 <div style={{opacity:0.8,fontSize:"0.85rem"}}>windmarsolaracademy.com</div>
                 <div style={{color:"#f89b24",fontWeight:700,marginTop:"0.75rem",fontSize:"0.85rem"}}>Visit Site ?</div>
               </a>
-              <a href="https://windmarsolaracademy.com/courses" target="_blank" rel="noreferrer"
+              <a href="https://ettrenv5nd46gqbz5a9e.app.clientclub.net/login" target="_blank" rel="noreferrer"
                 style={{background:"linear-gradient(135deg,#f89b24 0%,#d4811a 100%)",borderRadius:14,padding:"1.5rem",color:"white",textDecoration:"none",display:"block"}}>
                 <div style={{fontWeight:800,fontSize:"1.1rem",marginBottom:"0.3rem"}}>Training Portal</div>
                 <div style={{opacity:0.8,fontSize:"0.85rem"}}>GHL Membership Courses</div>
