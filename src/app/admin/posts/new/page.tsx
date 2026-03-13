@@ -17,6 +17,7 @@ export default function NewPostPage() {
     scheduled_for: "",
   })
   const [saving, setSaving] = useState(false)
+  const [uploading, setUploading] = useState(false)
   const [toast, setToast] = useState("")
   const [editId, setEditId] = useState<string | null>(null)
   const router = useRouter()
@@ -46,6 +47,24 @@ export default function NewPostPage() {
         scheduled_for: data.scheduled_for || "",
       })
     }
+  }
+
+  async function uploadImage(file: File) {
+    setUploading(true)
+    const ext = file.name.split(".").pop()
+    const fileName = "post-" + Date.now() + "." + ext
+    const { data, error } = await supabase.storage
+      .from("post-images")
+      .upload(fileName, file, { cacheControl: "3600", upsert: false })
+    if (error) {
+      showToast("Upload failed: " + error.message)
+      setUploading(false)
+      return
+    }
+    const { data: urlData } = supabase.storage.from("post-images").getPublicUrl(fileName)
+    setForm(prev => ({...prev, cover_image_url: urlData.publicUrl}))
+    setUploading(false)
+    showToast("Image uploaded!")
   }
 
   function showToast(msg: string) {
