@@ -262,6 +262,9 @@ export default function SpiffsPage() {
             const isExpired = new Date(g.entry_deadline) < new Date()
             return (
               <div key={g.id} style={{background:"white",borderRadius:14,boxShadow:"0 2px 8px rgba(0,0,0,0.06)",border:"1px solid #f3f4f6",overflow:"hidden"}}>
+                {g.prize_image_url && (
+                  <img src={g.prize_image_url} alt={g.prize_name} style={{width:"100%",height:160,objectFit:"cover",display:"block"}} />
+                )}
                 <div style={{background:"linear-gradient(135deg,#f89b24 0%,#d4811a 100%)",padding:"1rem 1.25rem",display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:"0.5rem"}}>
                   <div>
                     <div style={{color:"white",fontWeight:800,fontSize:"1.05rem"}}>{g.prize_name}</div>

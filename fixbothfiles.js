@@ -1,0 +1,65 @@
+const fs = require("fs");
+
+// -- FIX 1: Posts - replace URL input with upload UI --
+let posts = fs.readFileSync("src/app/admin/posts/new/page.tsx", "utf8");
+posts = posts.replace(
+  `<div style={{marginBottom:"0"}}>
+              <label style={labelStyle}>Cover Image URL</label>
+              <input type="url" value={form.cover_image_url} onChange={e => setForm({...form,cover_image_url:e.target.value})}
+                placeholder="https://..." style={inputStyle} />
+              {form.cover_image_url && (
+                <img src={form.cover_image_url} alt="preview"
+                  style={{width:"100%",height:160,objectFit:"cover",borderRadius:8,marginTop:"0.5rem"}} />
+              )}
+            </div>`,
+  `<div style={{marginBottom:"0"}}>
+              <label style={labelStyle}>Cover Image</label>
+              <div style={{border:"2px dashed #e5e7eb",borderRadius:8,padding:"1.5rem",textAlign:"center",cursor:"pointer",background:"#f9fafb"}}
+                onClick={() => { const el = document.getElementById("cover-upload"); if(el) el.click(); }}
+                onDragOver={(e) => { e.preventDefault(); (e.currentTarget as HTMLElement).style.borderColor="#f89b24" }}
+                onDragLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor="#e5e7eb" }}
+                onDrop={async (e) => { e.preventDefault(); const file = e.dataTransfer.files[0]; if(file) await uploadImage(file); }}>
+                <input id="cover-upload" type="file" accept="image/*" style={{display:"none"}}
+                  onChange={async (e) => { const file = e.target.files?.[0]; if(file) await uploadImage(file); }} />
+                {form.cover_image_url ? (
+                  <div style={{position:"relative"}}>
+                    <img src={form.cover_image_url} alt="preview" style={{width:"100%",height:180,objectFit:"cover",borderRadius:8}} />
+                    <button onClick={(e) => { e.stopPropagation(); setForm(p => ({...p,cover_image_url:""})) }}
+                      style={{position:"absolute",top:8,right:8,background:"rgba(0,0,0,0.6)",color:"white",border:"none",borderRadius:"50%",width:28,height:28,cursor:"pointer",fontSize:"0.9rem",fontWeight:700}}>
+                      X
+                    </button>
+                  </div>
+                ) : uploading ? (
+                  <div style={{color:"#f89b24",fontWeight:700,padding:"1rem"}}>Uploading...</div>
+                ) : (
+                  <>
+                    <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="1.5" style={{margin:"0 auto 0.75rem",display:"block"}}>
+                      <polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/>
+                      <path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/>
+                    </svg>
+                    <div style={{color:"#374151",fontWeight:700,fontSize:"0.95rem"}}>Click or drag image here</div>
+                    <div style={{color:"#9ca3af",fontSize:"0.8rem",marginTop:"0.3rem"}}>PNG, JPG, WebP up to 10MB</div>
+                  </>
+                )}
+              </div>
+            </div>`
+);
+fs.writeFileSync("src/app/admin/posts/new/page.tsx", posts, "utf8");
+console.log("done - posts upload UI fixed");
+
+// -- FIX 2: Spiffs - show image on the card after posting --
+let spiffs = fs.readFileSync("src/app/admin/spiffs/page.tsx", "utf8");
+
+// Show prize image on spiff card if it exists
+spiffs = spiffs.replace(
+  `<div key={g.id} style={{background:"white",borderRadius:14,boxShadow:"0 2px 8px rgba(0,0,0,0.06)",border:"1px solid #f3f4f6",overflow:"hidden"}}>
+                <div style={{background:"linear-gradient(135deg,#f89b24 0%,#d4811a 100%)",padding:"1rem 1.25rem",display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:"0.5rem"}}>`,
+  `<div key={g.id} style={{background:"white",borderRadius:14,boxShadow:"0 2px 8px rgba(0,0,0,0.06)",border:"1px solid #f3f4f6",overflow:"hidden"}}>
+                {g.prize_image_url && (
+                  <img src={g.prize_image_url} alt={g.prize_name} style={{width:"100%",height:160,objectFit:"cover",display:"block"}} />
+                )}
+                <div style={{background:"linear-gradient(135deg,#f89b24 0%,#d4811a 100%)",padding:"1rem 1.25rem",display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:"0.5rem"}}>`
+);
+
+fs.writeFileSync("src/app/admin/spiffs/page.tsx", spiffs, "utf8");
+console.log("done - spiffs card image fixed");
