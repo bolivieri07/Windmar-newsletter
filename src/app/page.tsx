@@ -27,6 +27,7 @@ type Giveaway = {
   id: string
   prize_name: string
   prize_description: string | null
+  prize_image_url: string | null
   entry_deadline: string
   status: string
   entry_count: number
@@ -316,6 +317,9 @@ export default function Home() {
               <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(300px,1fr))",gap:"1rem"}}>
                 {giveaways.map(g => (
                   <div key={g.id} className="spiff-card">
+                    {g.prize_image_url && (
+                      <img src={g.prize_image_url} alt={g.prize_name} style={{width:"100%",height:180,objectFit:"cover",display:"block"}} />
+                    )}
                     <div className="spiff-header">
                       <div>
                         <div className="spiff-title">{g.prize_name}</div>
