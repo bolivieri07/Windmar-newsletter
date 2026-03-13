@@ -1,4 +1,5 @@
-'use client'
+const fs = require("fs");
+const content = `'use client'
 import { useEffect, useState } from "react"
 import { createClient } from "@/lib/supabase/client"
 import Link from "next/link"
@@ -150,3 +151,6 @@ export default function PostsPage() {
     </div>
   )
 }
+`;
+fs.writeFileSync("src/app/admin/posts/page.tsx", content, "utf8");
+console.log("done - posts manager written");

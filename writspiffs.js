@@ -1,0 +1,257 @@
+const fs = require("fs");
+const path = require("path");
+const dir = "src/app/admin/spiffs";
+if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+const content = `'use client'
+import { useEffect, useState } from "react"
+import { createClient } from "@/lib/supabase/client"
+import Link from "next/link"
+
+export default function SpiffsPage() {
+  const [giveaways, setGiveaways] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [toast, setToast] = useState("")
+  const [showForm, setShowForm] = useState(false)
+  const [form, setForm] = useState({
+    prize_name: "",
+    prize_description: "",
+    entry_deadline: "",
+    start_date: "",
+    status: "active",
+    max_entries: "",
+    post_title: "",
+    post_excerpt: "",
+  })
+  const supabase = createClient()
+
+  useEffect(() => { fetchGiveaways() }, [])
+
+  async function fetchGiveaways() {
+    setLoading(true)
+    const { data } = await supabase
+      .from("giveaways")
+      .select("*, posts(title,excerpt)")
+      .order("created_at", { ascending: false })
+    setGiveaways(data || [])
+    setLoading(false)
+  }
+
+  function showToast(msg: string) {
+    setToast(msg)
+    setTimeout(() => setToast(""), 3000)
+  }
+
+  async function handleCreate() {
+    if (!form.prize_name.trim()) { showToast("Prize name is required"); return }
+    if (!form.entry_deadline) { showToast("Deadline is required"); return }
+    if (!form.post_title.trim()) { showToast("Post title is required"); return }
+    setSaving(true)
+    const { data: post, error: postError } = await supabase
+      .from("posts")
+      .insert({
+        title: form.post_title,
+        slug: form.post_title.toLowerCase().replace(/[^a-z0-9]+/g,"-") + "-" + Date.now(),
+        excerpt: form.post_excerpt,
+        post_type: "giveaway",
+        status: "published",
+        published_at: new Date().toISOString(),
+      })
+      .select()
+      .single()
+    if (postError) { showToast("Error creating post: " + postError.message); setSaving(false); return }
+    const { error: giveawayError } = await supabase
+      .from("giveaways")
+      .insert({
+        post_id: post.id,
+        prize_name: form.prize_name,
+        prize_description: form.prize_description,
+        entry_deadline: form.entry_deadline,
+        start_date: form.start_date || new Date().toISOString(),
+        status: form.status,
+        max_entries: form.max_entries ? parseInt(form.max_entries) : null,
+      })
+    if (giveawayError) { showToast("Error creating spiff: " + giveawayError.message); setSaving(false); return }
+    showToast("Spiff created and published!")
+    setShowForm(false)
+    setForm({ prize_name:"",prize_description:"",entry_deadline:"",start_date:"",status:"active",max_entries:"",post_title:"",post_excerpt:"" })
+    fetchGiveaways()
+    setSaving(false)
+  }
+
+  async function updateStatus(id: string, status: string) {
+    await supabase.from("giveaways").update({ status }).eq("id", id)
+    setGiveaways(prev => prev.map(g => g.id === id ? { ...g, status } : g))
+    showToast("Status updated!")
+  }
+
+  async function deleteSpiff(id: string, postId: string) {
+    if (!confirm("Delete this spiff? This cannot be undone.")) return
+    await supabase.from("giveaways").delete().eq("id", id)
+    await supabase.from("posts").delete().eq("id", postId)
+    setGiveaways(prev => prev.filter(g => g.id !== id))
+    showToast("Spiff deleted")
+  }
+
+  const statusColors: Record<string,{bg:string,color:string}> = {
+    active:   { bg:"#f0fdf4", color:"#15803d" },
+    upcoming: { bg:"#fef3e2", color:"#b45309" },
+    closed:   { bg:"#f3f4f6", color:"#6b7280" },
+    awarded:  { bg:"#e8edf8", color:"#1a2f6e" },
+  }
+
+  const inputStyle = {
+    width:"100%",padding:"0.8rem 1rem",border:"1.5px solid #e5e7eb",
+    borderRadius:8,fontSize:"0.95rem",fontFamily:"Barlow,system-ui,sans-serif",
+    outline:"none",color:"#1f2937",boxSizing:"border-box" as const,background:"white"
+  }
+
+  const labelStyle = {
+    display:"block" as const,color:"#374151",fontSize:"0.78rem",
+    fontWeight:700,marginBottom:"0.4rem",textTransform:"uppercase" as const,
+    letterSpacing:"0.04em"
+  }
+
+  return (
+    <div style={{maxWidth:1000,margin:"0 auto"}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"1.5rem",flexWrap:"wrap",gap:"1rem"}}>
+        <div>
+          <h1 style={{color:"#1a2f6e",fontSize:"1.75rem",fontWeight:800,margin:"0 0 0.25rem 0"}}>Spiffs Manager</h1>
+          <p style={{color:"#6b7280",fontSize:"0.9rem",margin:0}}>{giveaways.length} spiffs total</p>
+        </div>
+        <button onClick={() => setShowForm(!showForm)}
+          style={{padding:"0.75rem 1.25rem",background:"#f89b24",color:"white",border:"none",borderRadius:8,fontSize:"0.9rem",fontWeight:700,cursor:"pointer",fontFamily:"Barlow,system-ui,sans-serif"}}>
+          {showForm ? "Cancel" : "+ New Spiff"}
+        </button>
+      </div>
+
+      {showForm && (
+        <div style={{background:"white",borderRadius:14,padding:"1.5rem",boxShadow:"0 2px 8px rgba(0,0,0,0.06)",border:"1px solid #f3f4f6",marginBottom:"1.5rem"}}>
+          <h2 style={{color:"#1a2f6e",fontSize:"1rem",fontWeight:800,textTransform:"uppercase",letterSpacing:"0.04em",margin:"0 0 1.25rem 0"}}>Create New Spiff</h2>
+
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(250px,1fr))",gap:"1rem",marginBottom:"1rem"}}>
+            <div>
+              <label style={labelStyle}>Feed Post Title *</label>
+              <input type="text" value={form.post_title} onChange={e => setForm({...form,post_title:e.target.value})}
+                placeholder="e.g. Double Points Weekend!" style={inputStyle} />
+            </div>
+            <div>
+              <label style={labelStyle}>Prize / Reward Name *</label>
+              <input type="text" value={form.prize_name} onChange={e => setForm({...form,prize_name:e.target.value})}
+                placeholder="e.g. $500 Cash Bonus" style={inputStyle} />
+            </div>
+          </div>
+
+          <div style={{marginBottom:"1rem"}}>
+            <label style={labelStyle}>Description</label>
+            <textarea value={form.prize_description} onChange={e => setForm({...form,prize_description:e.target.value})}
+              placeholder="Describe the spiff criteria and how to earn it..."
+              style={{...inputStyle,minHeight:100,resize:"vertical"}} />
+          </div>
+
+          <div style={{marginBottom:"1rem"}}>
+            <label style={labelStyle}>Feed Excerpt</label>
+            <input type="text" value={form.post_excerpt} onChange={e => setForm({...form,post_excerpt:e.target.value})}
+              placeholder="Short preview shown in the feed..." style={inputStyle} />
+          </div>
+
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))",gap:"1rem",marginBottom:"1.25rem"}}>
+            <div>
+              <label style={labelStyle}>Start Date</label>
+              <input type="datetime-local" value={form.start_date} onChange={e => setForm({...form,start_date:e.target.value})} style={inputStyle} />
+            </div>
+            <div>
+              <label style={labelStyle}>Deadline *</label>
+              <input type="datetime-local" value={form.entry_deadline} onChange={e => setForm({...form,entry_deadline:e.target.value})} style={inputStyle} />
+            </div>
+            <div>
+              <label style={labelStyle}>Status</label>
+              <select value={form.status} onChange={e => setForm({...form,status:e.target.value})} style={{...inputStyle,cursor:"pointer"}}>
+                <option value="upcoming">Upcoming</option>
+                <option value="active">Active</option>
+                <option value="closed">Closed</option>
+              </select>
+            </div>
+            <div>
+              <label style={labelStyle}>Max Entries (optional)</label>
+              <input type="number" value={form.max_entries} onChange={e => setForm({...form,max_entries:e.target.value})}
+                placeholder="Leave blank for unlimited" style={inputStyle} />
+            </div>
+          </div>
+
+          <div style={{display:"flex",gap:"0.75rem"}}>
+            <button onClick={handleCreate} disabled={saving}
+              style={{padding:"0.8rem 1.5rem",background:"#f89b24",color:"white",border:"none",borderRadius:8,fontSize:"0.9rem",fontWeight:700,cursor:saving?"not-allowed":"pointer",opacity:saving?0.7:1,fontFamily:"Barlow,system-ui,sans-serif"}}>
+              {saving ? "Creating..." : "Create Spiff"}
+            </button>
+            <button onClick={() => setShowForm(false)}
+              style={{padding:"0.8rem 1.5rem",background:"white",color:"#6b7280",border:"1.5px solid #e5e7eb",borderRadius:8,fontSize:"0.9rem",fontWeight:700,cursor:"pointer",fontFamily:"Barlow,system-ui,sans-serif"}}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {loading ? (
+        <div style={{background:"white",borderRadius:14,padding:"3rem",textAlign:"center",color:"#9ca3af",fontWeight:600,boxShadow:"0 2px 8px rgba(0,0,0,0.06)"}}>Loading spiffs...</div>
+      ) : giveaways.length === 0 ? (
+        <div style={{background:"white",borderRadius:14,padding:"3rem",textAlign:"center",color:"#9ca3af",fontWeight:600,boxShadow:"0 2px 8px rgba(0,0,0,0.06)"}}>
+          No spiffs yet. Create your first one!
+        </div>
+      ) : (
+        <div style={{display:"grid",gap:"1rem"}}>
+          {giveaways.map(g => {
+            const sc = statusColors[g.status] || statusColors.closed
+            const isExpired = new Date(g.entry_deadline) < new Date()
+            return (
+              <div key={g.id} style={{background:"white",borderRadius:14,boxShadow:"0 2px 8px rgba(0,0,0,0.06)",border:"1px solid #f3f4f6",overflow:"hidden"}}>
+                <div style={{background:"linear-gradient(135deg,#f89b24 0%,#d4811a 100%)",padding:"1rem 1.25rem",display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:"0.5rem"}}>
+                  <div>
+                    <div style={{color:"white",fontWeight:800,fontSize:"1.05rem"}}>{g.prize_name}</div>
+                    <div style={{color:"rgba(255,255,255,0.8)",fontSize:"0.82rem",marginTop:"0.2rem"}}>{g.posts?.title}</div>
+                  </div>
+                  <div style={{display:"flex",alignItems:"center",gap:"0.5rem"}}>
+                    <span style={{padding:"0.25rem 0.75rem",borderRadius:20,fontSize:"0.75rem",fontWeight:700,background:sc.bg,color:sc.color,textTransform:"capitalize"}}>
+                      {g.status}
+                    </span>
+                    {isExpired && <span style={{padding:"0.25rem 0.75rem",borderRadius:20,fontSize:"0.75rem",fontWeight:700,background:"#fef2f2",color:"#dc2626"}}>Expired</span>}
+                  </div>
+                </div>
+                <div style={{padding:"1rem 1.25rem"}}>
+                  {g.prize_description && (
+                    <p style={{color:"#4b5563",fontSize:"0.88rem",lineHeight:1.55,margin:"0 0 0.75rem 0"}}>{g.prize_description}</p>
+                  )}
+                  <div style={{display:"flex",gap:"1.5rem",flexWrap:"wrap",fontSize:"0.82rem",color:"#6b7280",fontWeight:600,marginBottom:"1rem"}}>
+                    <span>Entries: {g.entry_count || 0}{g.max_entries ? " / " + g.max_entries : ""}</span>
+                    <span>Deadline: {new Date(g.entry_deadline).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"})}</span>
+                  </div>
+                  <div style={{display:"flex",gap:"0.5rem",flexWrap:"wrap"}}>
+                    {["upcoming","active","closed","awarded"].map(s => (
+                      <button key={s} onClick={() => updateStatus(g.id, s)}
+                        style={{padding:"0.3rem 0.75rem",borderRadius:6,border:"1.5px solid",borderColor:g.status===s?"#f89b24":"#e5e7eb",background:g.status===s?"#fef3e2":"white",color:g.status===s?"#b45309":"#6b7280",fontSize:"0.78rem",fontWeight:700,cursor:"pointer",textTransform:"capitalize",fontFamily:"Barlow,system-ui,sans-serif"}}>
+                        {s}
+                      </button>
+                    ))}
+                    <button onClick={() => deleteSpiff(g.id, g.post_id)}
+                      style={{padding:"0.3rem 0.75rem",borderRadius:6,border:"1.5px solid #fecaca",background:"white",color:"#dc2626",fontSize:"0.78rem",fontWeight:700,cursor:"pointer",fontFamily:"Barlow,system-ui,sans-serif",marginLeft:"auto"}}>
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {toast && (
+        <div style={{position:"fixed",bottom:24,left:"50%",transform:"translateX(-50%)",background:"#1a2f6e",color:"white",padding:"0.75rem 1.5rem",borderRadius:30,fontSize:"0.88rem",fontWeight:600,boxShadow:"0 8px 32px rgba(0,0,0,0.2)",zIndex:999,whiteSpace:"nowrap"}}>
+          {toast}
+        </div>
+      )}
+    </div>
+  )
+}
+`;
+fs.writeFileSync("src/app/admin/spiffs/page.tsx", content, "utf8");
+console.log("done - spiffs manager written");

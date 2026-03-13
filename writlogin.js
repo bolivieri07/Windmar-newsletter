@@ -1,4 +1,5 @@
-'use client'
+const fs = require("fs");
+const content = `'use client'
 import { useState } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { useRouter } from "next/navigation"
@@ -90,3 +91,6 @@ export default function LoginPage() {
     </div>
   )
 }
+`;
+fs.writeFileSync("src/app/login/page.tsx", content, "utf8");
+console.log("done - login page written");

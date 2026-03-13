@@ -1,4 +1,5 @@
-'use client'
+const fs = require("fs");
+const content = `'use client'
 import { useEffect, useState } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { useRouter, useSearchParams } from "next/navigation"
@@ -225,3 +226,6 @@ export default function NewPostPage() {
     </div>
   )
 }
+`;
+fs.writeFileSync("src/app/admin/posts/new/page.tsx", content, "utf8");
+console.log("done - post creator written");

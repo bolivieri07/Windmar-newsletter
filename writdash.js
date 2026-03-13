@@ -1,4 +1,5 @@
-'use client'
+const fs = require("fs");
+const content = `'use client'
 import { useEffect, useState } from "react"
 import { createClient } from "@/lib/supabase/client"
 import Link from "next/link"
@@ -82,7 +83,7 @@ export default function AdminDashboard() {
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:"0.75rem",marginBottom:"1.5rem"}}>
         {statCards.map(card => (
           <div key={card.label} style={{background:"white",borderRadius:12,padding:"1.25rem",boxShadow:"0 2px 8px rgba(0,0,0,0.06)",border:"1px solid #f3f4f6"}}>
-            <div style={{fontSize:"2rem",fontWeight:800,color:card.color,lineHeight:1}}>{loading ? "ï¿½" : card.value}</div>
+            <div style={{fontSize:"2rem",fontWeight:800,color:card.color,lineHeight:1}}>{loading ? "—" : card.value}</div>
             <div style={{fontSize:"0.75rem",color:"#6b7280",fontWeight:600,textTransform:"uppercase",letterSpacing:"0.04em",marginTop:"0.4rem"}}>{card.label}</div>
           </div>
         ))}
@@ -151,3 +152,6 @@ export default function AdminDashboard() {
     </div>
   )
 }
+`;
+fs.writeFileSync("src/app/admin/page.tsx", content, "utf8");
+console.log("done - dashboard written");

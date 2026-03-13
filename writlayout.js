@@ -1,4 +1,5 @@
-'use client'
+const fs = require("fs");
+const content = `'use client'
 import { useEffect, useState } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { useRouter, usePathname } from "next/navigation"
@@ -139,10 +140,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       </div>
 
       <style>{
-        `@media (min-width: 768px) {
+        \`@media (min-width: 768px) {
           .desktop-sidebar { display: flex !important; position: sticky; top: 52px; height: calc(100vh - 52px); flex-shrink: 0; }
-        }`
+        }\`
       }</style>
     </div>
   )
 }
+`;
+fs.writeFileSync("src/app/admin/layout.tsx", content, "utf8");
+console.log("done - admin layout written");
