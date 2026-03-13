@@ -229,7 +229,7 @@ export default function Home() {
               
             </div>
 
-            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))",gap:"1.5rem",marginBottom:"1.5rem"}}>
+            <div className="hero-desktop" style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))",gap:"1.5rem",marginBottom:"1.5rem"}}>
               {[
                 {img:ASSETS.panel1,title:"Sales Training",desc:"Master the art of solar sales with our proven frameworks and scripts.",tab:"videos"},
                 {img:ASSETS.panel2,title:"Active Spiffs",desc:"See all current incentives and bonuses available to you right now.",tab:"spiffs"},
