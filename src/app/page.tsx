@@ -147,6 +147,7 @@ export default function Home() {
         .content-grid { display: block; }
         .hero-desktop { display: none; }
         .hero-mobile { display: block; }
+        .desktop-only { display: none; }
         @media (min-width: 768px) {
           .desktop-nav { display: flex; }
           .mobile-nav { display: none !important; }
@@ -159,7 +160,7 @@ export default function Home() {
           .feed-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
           .desktop-only { display: grid !important; }
         }
-        .desktop-only { display: none !important; }
+        
         @media (min-width: 1200px) {
           .content-grid { grid-template-columns: 320px 1fr 280px; }
         }
