@@ -1,4 +1,5 @@
-"use client"
+const fs = require("fs");
+const page = `"use client"
 import { useEffect, useState } from "react"
 import { createClient } from "@/lib/supabase/client"
 
@@ -139,7 +140,7 @@ export default function Home() {
   return (
     <div style={{minHeight:"100vh",background:"#f9fafb",fontFamily:"Barlow,system-ui,sans-serif"}}>
 
-      <style>{`
+      <style>{\`
         .desktop-nav { display: none; }
         .mobile-nav { display: flex; }
         .desktop-layout { display: block; }
@@ -161,7 +162,7 @@ export default function Home() {
         @media (min-width: 1200px) {
           .content-grid { grid-template-columns: 320px 1fr 280px; }
         }
-      `}</style>
+      \`}</style>
 
       <header style={{background:"linear-gradient(135deg,#0f1d47 0%,#1a2f6e 100%)",position:"sticky",top:0,zIndex:100,boxShadow:"0 2px 16px rgba(0,0,0,0.25)"}}>
         <div style={{maxWidth:1400,margin:"0 auto",padding:"0 1.5rem",display:"flex",alignItems:"center",justifyContent:"space-between",height:64}}>
@@ -222,7 +223,7 @@ export default function Home() {
                   </div>
                 </div>
                 <div style={{display:"flex",gap:"1rem",flexWrap:"wrap"}}>
-                  {[{val:posts.length||"ï¿½",lbl:"Updates"},{val:events.length||"ï¿½",lbl:"Events"},{val:giveaways.length||"ï¿½",lbl:"Active Spiffs"}].map(s => (
+                  {[{val:posts.length||"—",lbl:"Updates"},{val:events.length||"—",lbl:"Events"},{val:giveaways.length||"—",lbl:"Active Spiffs"}].map(s => (
                     <div key={s.lbl} style={{background:"rgba(255,255,255,0.12)",borderRadius:12,padding:"1.25rem 1.5rem",textAlign:"center",minWidth:100}}>
                       <div style={{fontSize:"2rem",fontWeight:800,color:"#f89b24"}}>{s.val}</div>
                       <div style={{fontSize:"0.72rem",color:"rgba(255,255,255,0.7)",fontWeight:600,textTransform:"uppercase",letterSpacing:"0.04em"}}>{s.lbl}</div>
@@ -238,9 +239,9 @@ export default function Home() {
                 <div className="hero-name">Solar Academy</div>
                 <div className="hero-sub">We Train You. We Value You. We Promote You.</div>
                 <div className="hero-stats">
-                  <div className="hero-stat"><div className="hero-stat-val">{posts.length||"ï¿½"}</div><div className="hero-stat-lbl">Updates</div></div>
-                  <div className="hero-stat"><div className="hero-stat-val">{events.length||"ï¿½"}</div><div className="hero-stat-lbl">Events</div></div>
-                  <div className="hero-stat"><div className="hero-stat-val">{giveaways.length||"ï¿½"}</div><div className="hero-stat-lbl">Spiffs</div></div>
+                  <div className="hero-stat"><div className="hero-stat-val">{posts.length||"—"}</div><div className="hero-stat-lbl">Updates</div></div>
+                  <div className="hero-stat"><div className="hero-stat-val">{events.length||"—"}</div><div className="hero-stat-lbl">Events</div></div>
+                  <div className="hero-stat"><div className="hero-stat-val">{giveaways.length||"—"}</div><div className="hero-stat-lbl">Spiffs</div></div>
                 </div>
               </div>
               <div className="quick-grid">
@@ -283,7 +284,7 @@ export default function Home() {
               {loading ? (
                 <div className="loading-card">Loading updates...</div>
               ) : recentPosts.length === 0 ? (
-                <div className="loading-card">No posts yet ï¿½ check back soon!</div>
+                <div className="loading-card">No posts yet — check back soon!</div>
               ) : (
                 <div className="feed-grid">
                   {recentPosts.map(post => <FeedCard key={post.id} post={post} />)}
@@ -325,7 +326,7 @@ export default function Home() {
             <div style={{background:"linear-gradient(135deg,#7c3f00 0%,#d4811a 100%)",borderRadius:16,padding:"2rem",marginBottom:"1.5rem",color:"white",position:"relative",overflow:"hidden"}}>
               <div style={{position:"absolute",right:-20,top:-20,width:200,height:200,borderRadius:"50%",background:"rgba(255,255,255,0.05)"}} />
               <h1 style={{fontSize:"2rem",fontWeight:800,margin:"0 0 0.5rem 0"}}>Active Spiffs</h1>
-              <p style={{opacity:0.85,margin:0,fontSize:"1rem"}}>{giveaways.length > 0 ? giveaways.length + " spiffs running now ï¿½ get after it!" : "Check back soon for new spiffs!"}</p>
+              <p style={{opacity:0.85,margin:0,fontSize:"1rem"}}>{giveaways.length > 0 ? giveaways.length + " spiffs running now — get after it!" : "Check back soon for new spiffs!"}</p>
             </div>
             {loading ? (
               <div className="loading-card">Loading spiffs...</div>
@@ -469,12 +470,12 @@ export default function Home() {
             <h2 style={{color:"#1a2f6e",fontSize:"1rem",fontWeight:800,textTransform:"uppercase",letterSpacing:"0.04em",marginBottom:"1rem"}}>Documents</h2>
             <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(260px,1fr))",gap:"0.75rem"}}>
               {[
-                {icon:"??",label:"Install Process Guide",meta:"PDF ï¿½ Operations"},
-                {icon:"??",label:"Commission Structure",meta:"PDF ï¿½ Sales Team"},
-                {icon:"??",label:"Customer Proposal Template",meta:"PowerPoint ï¿½ Sales"},
-                {icon:"??",label:"Compliance Checklist",meta:"PDF ï¿½ Legal ï¿½ 2025"},
-                {icon:"??",label:"Territory Map ï¿½ Puerto Rico",meta:"PDF ï¿½ Operations"},
-                {icon:"??",label:"Product Catalog 2025",meta:"PDF ï¿½ Marketing"},
+                {icon:"??",label:"Install Process Guide",meta:"PDF · Operations"},
+                {icon:"??",label:"Commission Structure",meta:"PDF · Sales Team"},
+                {icon:"??",label:"Customer Proposal Template",meta:"PowerPoint · Sales"},
+                {icon:"??",label:"Compliance Checklist",meta:"PDF · Legal · 2025"},
+                {icon:"??",label:"Territory Map — Puerto Rico",meta:"PDF · Operations"},
+                {icon:"??",label:"Product Catalog 2025",meta:"PDF · Marketing"},
               ].map((doc,i) => (
                 <div key={i} className="resource-card" onClick={() => showToast("Document coming soon!")}>
                   <div className="resource-icon" style={{background:"#f3f4f6"}}>{doc.icon}</div>
@@ -514,3 +515,6 @@ export default function Home() {
     </div>
   )
 }
+`;
+fs.writeFileSync("src/app/page.tsx", page, "utf8");
+console.log("done - responsive page written");
