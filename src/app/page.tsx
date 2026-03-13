@@ -157,7 +157,9 @@ export default function Home() {
           .hero-desktop { display: block; }
           .hero-mobile { display: none; }
           .feed-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+          .desktop-only { display: grid !important; }
         }
+        .desktop-only { display: none !important; }
         @media (min-width: 1200px) {
           .content-grid { grid-template-columns: 320px 1fr 280px; }
         }
@@ -229,7 +231,7 @@ export default function Home() {
               
             </div>
 
-            <div className="hero-desktop" style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))",gap:"1.5rem",marginBottom:"1.5rem"}}>
+            <div className="desktop-only" style={{gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))",gap:"1.5rem",marginBottom:"1.5rem"}}>
               {[
                 {img:ASSETS.panel1,title:"Sales Training",desc:"Master the art of solar sales with our proven frameworks and scripts.",tab:"videos"},
                 {img:ASSETS.panel2,title:"Active Spiffs",desc:"See all current incentives and bonuses available to you right now.",tab:"spiffs"},
