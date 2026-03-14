@@ -51,7 +51,7 @@ export default function NewPostPage() {
     const ext = file.name.split(".").pop()
     const fileName = "post-" + Date.now() + "." + ext
     const { error } = await supabase.storage
-      .from("post-images")
+      .from("post-image")
       .upload(fileName, file, { cacheControl: "3600", upsert: false })
     if (error) {
       showToast("Upload failed: " + error.message)
