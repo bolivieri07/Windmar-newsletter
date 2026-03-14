@@ -73,17 +73,18 @@ export default function Home() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [rsvpModal, setRsvpModal] = useState(false)
   const [rsvpEvent, setRsvpEvent] = useState<Event | null>(null)
-  const [rsvpForm, setRsvpForm] = useState({ name: "", email: "" })
+  const [rsvpForm, setRsvpForm] = useState({ name: "", email: "", phone: "" })
   const [rsvpSending, setRsvpSending] = useState(false)
 
   async function handleRsvp() {
-    if (!rsvpForm.name.trim() || !rsvpForm.email.trim()) { showToast("Name and email required"); return }
+    if (!rsvpForm.name.trim() || !rsvpForm.email.trim() || !rsvpForm.phone.trim()) { showToast("Name, email, and phone required"); return }
     if (!rsvpEvent) return
     setRsvpSending(true)
     const { error } = await supabase.from("event_rsvps").insert({
       event_id: rsvpEvent.id,
       name: rsvpForm.name,
       email: rsvpForm.email,
+      phone: rsvpForm.phone,
     })
     if (error) {
       if (error.code === "23505") { showToast("You already RSVPed!") }
@@ -95,7 +96,7 @@ export default function Home() {
     setEvents(prev => prev.map(e => e.id === rsvpEvent.id ? { ...e, rsvp_count: (e.rsvp_count || 0) + 1 } : e))
     showToast("RSVP confirmed!")
     setRsvpModal(false)
-    setRsvpForm({ name: "", email: "" })
+    setRsvpForm({ name: "", email: "", phone: "" })
     setRsvpSending(false)
   }
   const supabase = createClient()
@@ -208,6 +209,18 @@ export default function Home() {
             </svg>
             Like
           </button>
+          {post.post_type === "event" && (() => {
+            const matchedEvent = events.find(e => e.posts?.title === post.title)
+            return matchedEvent && matchedEvent.is_rsvp_open ? (
+              <button onClick={() => { setRsvpEvent(matchedEvent); setRsvpModal(true) }}
+                style={{display:"flex",alignItems:"center",gap:"0.35rem",fontSize:"0.82rem",color:"#f89b24",cursor:"pointer",border:"none",background:"none",fontFamily:"Barlow,system-ui,sans-serif",fontWeight:700}}>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{width:18,height:18}}>
+                  <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/>
+                </svg>
+                RSVP
+              </button>
+            ) : null
+          })()}
         </div>
       </div>
     )
@@ -563,10 +576,6 @@ export default function Home() {
                   const coverImg = event.cover_image_url || event.posts?.cover_image_url
                   return (
                     <div key={event.id} style={{background:"white",borderRadius:14,boxShadow:"0 2px 12px rgba(0,0,0,0.08)",border:"1px solid #f3f4f6",overflow:"hidden"}}>
-                      {coverImg && (
-                        <img src={coverImg} alt={event.posts?.title || "Event"} style={{width:"100%",height:180,objectFit:"cover",display:"block"}}
-                          onError={(e:any)=>{e.target.style.display="none"}} />
-                      )}
                       <div style={{display:"flex"}}>
                         <div style={{background:"linear-gradient(135deg,#1a2f6e 0%,#2a4a9e 100%)",padding:"1.5rem",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",minWidth:90}}>
                           <div style={{fontSize:"2rem",fontWeight:800,color:"white",lineHeight:1}}>{d.getDate()}</div>
@@ -675,10 +684,16 @@ export default function Home() {
                 placeholder="Full name"
                 style={{width:"100%",padding:"0.8rem 1rem",border:"1.5px solid #e5e7eb",borderRadius:8,fontSize:"0.95rem",fontFamily:"Barlow,system-ui,sans-serif",outline:"none",color:"#1f2937",boxSizing:"border-box",background:"white"}} />
             </div>
-            <div style={{marginBottom:"1.25rem"}}>
+            <div style={{marginBottom:"1rem"}}>
               <label style={{display:"block",color:"#374151",fontSize:"0.78rem",fontWeight:700,marginBottom:"0.4rem",textTransform:"uppercase",letterSpacing:"0.04em"}}>Email *</label>
               <input type="email" value={rsvpForm.email} onChange={e => setRsvpForm({...rsvpForm,email:e.target.value})}
                 placeholder="your@email.com"
+                style={{width:"100%",padding:"0.8rem 1rem",border:"1.5px solid #e5e7eb",borderRadius:8,fontSize:"0.95rem",fontFamily:"Barlow,system-ui,sans-serif",outline:"none",color:"#1f2937",boxSizing:"border-box",background:"white"}} />
+            </div>
+            <div style={{marginBottom:"1.25rem"}}>
+              <label style={{display:"block",color:"#374151",fontSize:"0.78rem",fontWeight:700,marginBottom:"0.4rem",textTransform:"uppercase",letterSpacing:"0.04em"}}>Phone *</label>
+              <input type="tel" value={rsvpForm.phone} onChange={e => setRsvpForm({...rsvpForm,phone:e.target.value})}
+                placeholder="(555) 123-4567"
                 style={{width:"100%",padding:"0.8rem 1rem",border:"1.5px solid #e5e7eb",borderRadius:8,fontSize:"0.95rem",fontFamily:"Barlow,system-ui,sans-serif",outline:"none",color:"#1f2937",boxSizing:"border-box",background:"white"}} />
             </div>
             <div style={{display:"flex",gap:"0.75rem"}}>
@@ -701,6 +716,10 @@ export default function Home() {
     </div>
   )
 }
+
+
+
+
 
 
 
