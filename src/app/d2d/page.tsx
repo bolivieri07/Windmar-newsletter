@@ -1,5 +1,8 @@
 ﻿"use client"
 import { useEffect, useState } from "react"
+import dynamic from "next/dynamic"
+
+const LeadMap = dynamic(() => import("@/components/LeadMap"), { ssr: false, loading: () => <div style={{height:500,display:"flex",alignItems:"center",justifyContent:"center",background:"#e8edf8",borderRadius:14,color:"#9ca3af",fontWeight:600}}>Loading map...</div> })
 
 type Lead = {
   id: string
@@ -317,38 +320,13 @@ export default function D2DPage() {
                 </button>
               ))}
             </div>
-            <div style={{background:"white",borderRadius:14,boxShadow:"0 2px 8px rgba(0,0,0,0.06)",border:"1px solid #f3f4f6",overflow:"hidden",position:"relative"}}>
-              <div style={{height:500,position:"relative",background:"#e8edf8"}}>
-                {filteredLeads.filter(l => l.lat && l.lng).length === 0 ? (
-                  <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:"0.5rem"}}>
-                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="1.5"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
-                    <div style={{color:"#9ca3af",fontWeight:600}}>No geocoded leads to display</div>
-                    <div style={{color:"#c4c4c4",fontSize:"0.82rem"}}>Leads need lat/lng coordinates in SalesRabbit</div>
-                  </div>
-                ) : (
-                  <div style={{position:"relative",width:"100%",height:"100%",overflow:"hidden"}}>
-                    <div style={{position:"absolute",top:12,left:12,background:"white",borderRadius:8,padding:"0.75rem 1rem",boxShadow:"0 2px 12px rgba(0,0,0,0.15)",zIndex:10}}>
-                      <div style={{fontWeight:700,color:"#1a2f6e",fontSize:"0.88rem",marginBottom:"0.3rem"}}>Lead Map</div>
-                      <div style={{color:"#6b7280",fontSize:"0.78rem"}}>{filteredLeads.filter(l => l.lat && l.lng).length} pins displayed</div>
-                    </div>
-                    <div style={{width:"100%",height:"100%",display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(8px,1fr))",gridAutoRows:8,gap:1,padding:40,alignContent:"center",justifyContent:"center",position:"relative"}}>
-                      {filteredLeads.filter(l => l.lat && l.lng).slice(0, 200).map(lead => {
-                        const normX = ((lead.lng + 180) / 360) * 100
-                        const normY = ((90 - lead.lat) / 180) * 100
-                        return (
-                          <div key={lead.id} onClick={() => setSelectedLead(lead)}
-                            style={{position:"absolute",left:normX + "%",top:normY + "%",width:14,height:14,borderRadius:"50%",
-                              background:lead.statusColor,border:"2px solid white",boxShadow:"0 2px 6px rgba(0,0,0,0.3)",
-                              cursor:"pointer",transform:"translate(-50%,-50%)",zIndex:5,transition:"transform 0.15s"}}
-                            onMouseEnter={(e:any) => e.currentTarget.style.transform = "translate(-50%,-50%) scale(1.5)"}
-                            onMouseLeave={(e:any) => e.currentTarget.style.transform = "translate(-50%,-50%) scale(1)"}
-                            title={lead.firstName + " " + lead.lastName + " - " + lead.status} />
-                        )
-                      })}
-                    </div>
-                  </div>
-                )}
-              </div>
+            <div style={{background:"white",borderRadius:14,boxShadow:"0 2px 8px rgba(0,0,0,0.06)",border:"1px solid #f3f4f6",overflow:"hidden"}}>
+              <LeadMap leads={filteredLeads} onSelectLead={(lead: any) => setSelectedLead(lead)} />
+            </div>
+            <div style={{marginTop:"0.75rem",display:"flex",gap:"0.75rem",flexWrap:"wrap",fontSize:"0.78rem",color:"#9ca3af",fontWeight:600}}>
+              <span>{filteredLeads.filter(l => l.lat && l.lng && l.lat !== 0 && l.lng !== 0).length} pins on map</span>
+              <span>Click a pin for details</span>
+              <span>Scroll to zoom</span>
             </div>
           </div>
         )}
@@ -518,3 +496,4 @@ export default function D2DPage() {
     </div>
   )
 }
+
