@@ -102,7 +102,12 @@ export default function Home() {
     return (
       <div className="feed-card">
         {post.cover_image_url && (
-          <img src={post.cover_image_url} alt={post.title} style={{width:"100%",maxHeight:200,objectFit:"cover",display:"block"}} />
+          <img
+            src={post.cover_image_url}
+            alt={post.title}
+            style={{width:"100%",maxHeight:260,objectFit:"cover",display:"block",borderRadius:"14px 14px 0 0"}}
+            onError={(e: any) => { console.error("Image failed:", post.cover_image_url); e.target.style.display="none" }}
+          />
         )}
         <div className="feed-card-header">
           <div className="feed-author-avatar" style={{background:getAvatarColor(post.post_type)}}>{getInitials(post.post_type)}</div>
@@ -499,3 +504,5 @@ export default function Home() {
     </div>
   )
 }
+
+
