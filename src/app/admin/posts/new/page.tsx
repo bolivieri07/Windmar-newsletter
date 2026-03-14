@@ -58,7 +58,7 @@ export default function NewPostPage() {
       setUploading(false)
       return
     }
-    const { data: urlData } = supabase.storage.from("post-images").getPublicUrl(fileName)
+    const { data: urlData } = supabase.storage.from("post-image").getPublicUrl(fileName)
     setForm(prev => ({...prev, cover_image_url: urlData.publicUrl}))
     setUploading(false)
     showToast("Image uploaded!")
