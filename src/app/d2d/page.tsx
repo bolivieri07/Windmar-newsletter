@@ -68,8 +68,10 @@ export default function D2DPage() {
   const [showCreateLead, setShowCreateLead] = useState(false)
   const [creatingSR, setCreatingSR] = useState(false)
   const [newLeadForm, setNewLeadForm] = useState({
-    firstName:"", lastName:"", address:"", city:"", state:"", zip:"",
-    phone:"", email:"", notes:"", status:"Not Home", assignTo:"",
+    firstName:"", lastName:"", phone:"", email:"",
+    appointmentDate:"", address:"", city:"", state:"", zip:"",
+    language:"English", employeeId:"", driver:"", product:"Solar",
+    leadSource:"D2D", appointmentNotes:"", assignTo:"",
   })
 
   async function handleCreateLead() {
@@ -90,7 +92,7 @@ export default function D2DPage() {
           zip: newLeadForm.zip,
           mobile_phone: newLeadForm.phone,
           email: newLeadForm.email,
-          description: newLeadForm.notes,
+          description: newLeadForm.appointmentNotes,
           addressLatitude: newPin.lat.toString(),
           addressLongitude: newPin.lng.toString(),
         }),
@@ -100,7 +102,7 @@ export default function D2DPage() {
       showToast("Lead created in SalesRabbit!")
       setShowCreateLead(false)
       setNewPin(null)
-      setNewLeadForm({ firstName:"",lastName:"",address:"",city:"",state:"",zip:"",phone:"",email:"",notes:"",status:"Not Home",assignTo:"" })
+      setNewLeadForm({ firstName:"",lastName:"",phone:"",email:"",appointmentDate:"",address:"",city:"",state:"",zip:"",language:"English",employeeId:"",driver:"",product:"Solar",leadSource:"D2D",appointmentNotes:"",assignTo:"" })
       loadData()
     } catch (err: any) {
       showToast("Failed: " + err.message)
@@ -387,22 +389,39 @@ export default function D2DPage() {
                   </div>
                   <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0.75rem",marginBottom:"0.75rem"}}>
                     <div>
-                      <label style={{display:"block",color:"#374151",fontSize:"0.72rem",fontWeight:700,marginBottom:"0.3rem",textTransform:"uppercase",letterSpacing:"0.04em"}}>First Name</label>
+                      <label style={{display:"block",color:"#374151",fontSize:"0.72rem",fontWeight:700,marginBottom:"0.3rem",textTransform:"uppercase",letterSpacing:"0.04em"}}>First Name *</label>
                       <input type="text" value={newLeadForm.firstName} onChange={e => setNewLeadForm({...newLeadForm,firstName:e.target.value})}
                         style={{...inputStyle,width:"100%",padding:"0.6rem 0.75rem",fontSize:"0.85rem"}} />
                     </div>
                     <div>
-                      <label style={{display:"block",color:"#374151",fontSize:"0.72rem",fontWeight:700,marginBottom:"0.3rem",textTransform:"uppercase",letterSpacing:"0.04em"}}>Last Name</label>
+                      <label style={{display:"block",color:"#374151",fontSize:"0.72rem",fontWeight:700,marginBottom:"0.3rem",textTransform:"uppercase",letterSpacing:"0.04em"}}>Last Name *</label>
                       <input type="text" value={newLeadForm.lastName} onChange={e => setNewLeadForm({...newLeadForm,lastName:e.target.value})}
                         style={{...inputStyle,width:"100%",padding:"0.6rem 0.75rem",fontSize:"0.85rem"}} />
                     </div>
                   </div>
-                  <div style={{marginBottom:"0.75rem"}}>
-                    <label style={{display:"block",color:"#374151",fontSize:"0.72rem",fontWeight:700,marginBottom:"0.3rem",textTransform:"uppercase",letterSpacing:"0.04em"}}>Address</label>
-                    <input type="text" value={newLeadForm.address} onChange={e => setNewLeadForm({...newLeadForm,address:e.target.value})}
-                      placeholder="Street address" style={{...inputStyle,width:"100%",padding:"0.6rem 0.75rem",fontSize:"0.85rem"}} />
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0.75rem",marginBottom:"0.75rem"}}>
+                    <div>
+                      <label style={{display:"block",color:"#374151",fontSize:"0.72rem",fontWeight:700,marginBottom:"0.3rem",textTransform:"uppercase",letterSpacing:"0.04em"}}>Phone *</label>
+                      <input type="tel" value={newLeadForm.phone} onChange={e => setNewLeadForm({...newLeadForm,phone:e.target.value})}
+                        style={{...inputStyle,width:"100%",padding:"0.6rem 0.75rem",fontSize:"0.85rem"}} />
+                    </div>
+                    <div>
+                      <label style={{display:"block",color:"#374151",fontSize:"0.72rem",fontWeight:700,marginBottom:"0.3rem",textTransform:"uppercase",letterSpacing:"0.04em"}}>Email</label>
+                      <input type="email" value={newLeadForm.email} onChange={e => setNewLeadForm({...newLeadForm,email:e.target.value})}
+                        style={{...inputStyle,width:"100%",padding:"0.6rem 0.75rem",fontSize:"0.85rem"}} />
+                    </div>
                   </div>
-                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:"0.75rem",marginBottom:"0.75rem"}}>
+                  <div style={{marginBottom:"0.75rem"}}>
+                    <label style={{display:"block",color:"#374151",fontSize:"0.72rem",fontWeight:700,marginBottom:"0.3rem",textTransform:"uppercase",letterSpacing:"0.04em"}}>Appointment Date/Time</label>
+                    <input type="datetime-local" value={newLeadForm.appointmentDate} onChange={e => setNewLeadForm({...newLeadForm,appointmentDate:e.target.value})}
+                      style={{...inputStyle,width:"100%",padding:"0.6rem 0.75rem",fontSize:"0.85rem"}} />
+                  </div>
+                  <div style={{marginBottom:"0.75rem"}}>
+                    <label style={{display:"block",color:"#374151",fontSize:"0.72rem",fontWeight:700,marginBottom:"0.3rem",textTransform:"uppercase",letterSpacing:"0.04em"}}>Street Address</label>
+                    <input type="text" value={newLeadForm.address} onChange={e => setNewLeadForm({...newLeadForm,address:e.target.value})}
+                      style={{...inputStyle,width:"100%",padding:"0.6rem 0.75rem",fontSize:"0.85rem"}} />
+                  </div>
+                  <div style={{display:"grid",gridTemplateColumns:"2fr 1fr 1fr",gap:"0.75rem",marginBottom:"0.75rem"}}>
                     <div>
                       <label style={{display:"block",color:"#374151",fontSize:"0.72rem",fontWeight:700,marginBottom:"0.3rem",textTransform:"uppercase",letterSpacing:"0.04em"}}>City</label>
                       <input type="text" value={newLeadForm.city} onChange={e => setNewLeadForm({...newLeadForm,city:e.target.value})}
@@ -421,30 +440,65 @@ export default function D2DPage() {
                   </div>
                   <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0.75rem",marginBottom:"0.75rem"}}>
                     <div>
-                      <label style={{display:"block",color:"#374151",fontSize:"0.72rem",fontWeight:700,marginBottom:"0.3rem",textTransform:"uppercase",letterSpacing:"0.04em"}}>Phone</label>
-                      <input type="tel" value={newLeadForm.phone} onChange={e => setNewLeadForm({...newLeadForm,phone:e.target.value})}
-                        style={{...inputStyle,width:"100%",padding:"0.6rem 0.75rem",fontSize:"0.85rem"}} />
+                      <label style={{display:"block",color:"#374151",fontSize:"0.72rem",fontWeight:700,marginBottom:"0.3rem",textTransform:"uppercase",letterSpacing:"0.04em"}}>Language</label>
+                      <select value={newLeadForm.language} onChange={e => setNewLeadForm({...newLeadForm,language:e.target.value})}
+                        style={{...inputStyle,width:"100%",padding:"0.6rem 0.75rem",fontSize:"0.85rem",cursor:"pointer"}}>
+                        <option value="English">English</option>
+                        <option value="Spanish">Spanish</option>
+                      </select>
                     </div>
                     <div>
-                      <label style={{display:"block",color:"#374151",fontSize:"0.72rem",fontWeight:700,marginBottom:"0.3rem",textTransform:"uppercase",letterSpacing:"0.04em"}}>Email</label>
-                      <input type="email" value={newLeadForm.email} onChange={e => setNewLeadForm({...newLeadForm,email:e.target.value})}
+                      <label style={{display:"block",color:"#374151",fontSize:"0.72rem",fontWeight:700,marginBottom:"0.3rem",textTransform:"uppercase",letterSpacing:"0.04em"}}>Windmar Employee ID</label>
+                      <input type="text" value={newLeadForm.employeeId} onChange={e => setNewLeadForm({...newLeadForm,employeeId:e.target.value})}
                         style={{...inputStyle,width:"100%",padding:"0.6rem 0.75rem",fontSize:"0.85rem"}} />
                     </div>
                   </div>
-                  <div style={{marginBottom:"0.75rem"}}>
-                    <label style={{display:"block",color:"#374151",fontSize:"0.72rem",fontWeight:700,marginBottom:"0.3rem",textTransform:"uppercase",letterSpacing:"0.04em"}}>Assign to Rep</label>
-                    <select value={newLeadForm.assignTo} onChange={e => setNewLeadForm({...newLeadForm,assignTo:e.target.value})}
-                      style={{...inputStyle,width:"100%",padding:"0.6rem 0.75rem",fontSize:"0.85rem",cursor:"pointer"}}>
-                      <option value="">Unassigned</option>
-                      {users.map(u => (
-                        <option key={u.id} value={u.id}>{u.firstName} {u.lastName}</option>
-                      ))}
-                    </select>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0.75rem",marginBottom:"0.75rem"}}>
+                    <div>
+                      <label style={{display:"block",color:"#374151",fontSize:"0.72rem",fontWeight:700,marginBottom:"0.3rem",textTransform:"uppercase",letterSpacing:"0.04em"}}>Driver</label>
+                      <input type="text" value={newLeadForm.driver} onChange={e => setNewLeadForm({...newLeadForm,driver:e.target.value})}
+                        placeholder="Rep who drove" style={{...inputStyle,width:"100%",padding:"0.6rem 0.75rem",fontSize:"0.85rem"}} />
+                    </div>
+                    <div>
+                      <label style={{display:"block",color:"#374151",fontSize:"0.72rem",fontWeight:700,marginBottom:"0.3rem",textTransform:"uppercase",letterSpacing:"0.04em"}}>Product</label>
+                      <select value={newLeadForm.product} onChange={e => setNewLeadForm({...newLeadForm,product:e.target.value})}
+                        style={{...inputStyle,width:"100%",padding:"0.6rem 0.75rem",fontSize:"0.85rem",cursor:"pointer"}}>
+                        <option value="Solar">Solar</option>
+                        <option value="Battery">Battery</option>
+                        <option value="Solar + Battery">Solar + Battery</option>
+                        <option value="Roofing">Roofing</option>
+                        <option value="Other">Other</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0.75rem",marginBottom:"0.75rem"}}>
+                    <div>
+                      <label style={{display:"block",color:"#374151",fontSize:"0.72rem",fontWeight:700,marginBottom:"0.3rem",textTransform:"uppercase",letterSpacing:"0.04em"}}>Lead Source</label>
+                      <select value={newLeadForm.leadSource} onChange={e => setNewLeadForm({...newLeadForm,leadSource:e.target.value})}
+                        style={{...inputStyle,width:"100%",padding:"0.6rem 0.75rem",fontSize:"0.85rem",cursor:"pointer"}}>
+                        <option value="D2D">D2D</option>
+                        <option value="Referral">Referral</option>
+                        <option value="Self-Gen">Self-Gen</option>
+                        <option value="Marketing">Marketing</option>
+                        <option value="Event">Event</option>
+                        <option value="Other">Other</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label style={{display:"block",color:"#374151",fontSize:"0.72rem",fontWeight:700,marginBottom:"0.3rem",textTransform:"uppercase",letterSpacing:"0.04em"}}>Assign to Rep</label>
+                      <select value={newLeadForm.assignTo} onChange={e => setNewLeadForm({...newLeadForm,assignTo:e.target.value})}
+                        style={{...inputStyle,width:"100%",padding:"0.6rem 0.75rem",fontSize:"0.85rem",cursor:"pointer"}}>
+                        <option value="">Unassigned</option>
+                        {users.map(u => (
+                          <option key={u.id} value={u.id}>{u.firstName} {u.lastName}</option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
                   <div style={{marginBottom:"0.75rem"}}>
-                    <label style={{display:"block",color:"#374151",fontSize:"0.72rem",fontWeight:700,marginBottom:"0.3rem",textTransform:"uppercase",letterSpacing:"0.04em"}}>Notes</label>
-                    <textarea value={newLeadForm.notes} onChange={e => setNewLeadForm({...newLeadForm,notes:e.target.value})}
-                      placeholder="Door knock notes..."
+                    <label style={{display:"block",color:"#374151",fontSize:"0.72rem",fontWeight:700,marginBottom:"0.3rem",textTransform:"uppercase",letterSpacing:"0.04em"}}>Appointment Notes</label>
+                    <textarea value={newLeadForm.appointmentNotes} onChange={e => setNewLeadForm({...newLeadForm,appointmentNotes:e.target.value})}
+                      placeholder="Notes about the appointment or door knock..."
                       style={{...inputStyle,width:"100%",padding:"0.6rem 0.75rem",fontSize:"0.85rem",minHeight:70,resize:"vertical"}} />
                   </div>
                   <div style={{display:"flex",gap:"0.5rem"}}>
@@ -633,6 +687,12 @@ export default function D2DPage() {
     </div>
   )
 }
+
+
+
+
+
+
 
 
 
