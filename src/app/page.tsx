@@ -167,11 +167,15 @@ export default function Home() {
         .desktop-nav-btn.active { background: rgba(248,155,36,0.15); color: #f89b24; }
         .desktop-nav-btn svg { width: 18px; height: 18px; flex-shrink: 0; }
         .mobile-menu-overlay { display: block; }
+        .mobile-menu-btn { display: flex; }
+        .desktop-nav-only { display: none; }
         .mobile-menu-panel { display: block; }
         @media (min-width: 768px) {
           .desktop-nav { display: flex; }
           .mobile-nav { display: none !important; }
           .mobile-menu-overlay { display: none !important; }
+          .mobile-menu-btn { display: none !important; }
+          .desktop-nav-only { display: inline-flex !important; }
           .mobile-menu-panel { display: none !important; }
           .app-shell { max-width: 100% !important; }
           .app-content { padding-bottom: 0 !important; }
@@ -260,14 +264,20 @@ export default function Home() {
             </nav>
           </div>
           <div style={{display:"flex",alignItems:"center",gap:"0.75rem"}}>
-            <a href="https://windmarsolaracademy.com" target="_blank" rel="noreferrer"
+            <a href="https://windmarsolaracademy.com" target="_blank" rel="noreferrer" className="desktop-nav-only"
               style={{padding:"0.5rem 1rem",background:"rgba(255,255,255,0.1)",color:"white",borderRadius:6,fontSize:"0.82rem",fontWeight:700,textDecoration:"none",whiteSpace:"nowrap"}}>
               Academy Site
             </a>
-            <a href="/login"
+            <a href="/login" className="desktop-nav-only"
               style={{padding:"0.5rem 1rem",background:"#f89b24",color:"white",borderRadius:6,fontSize:"0.82rem",fontWeight:700,textDecoration:"none",whiteSpace:"nowrap"}}>
               Admin
             </a>
+            <button className="mobile-menu-btn" onClick={() => setMobileMenuOpen(true)}
+              style={{background:"rgba(255,255,255,0.1)",border:"none",borderRadius:8,width:40,height:40,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:"white"}}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
+              </svg>
+            </button>
           </div>
         </div>
       </header>
@@ -564,12 +574,7 @@ export default function Home() {
             <span className="nav-label">{tab.label}</span>
           </button>
         ))}
-        <button className="nav-item" onClick={() => setMobileMenuOpen(true)}>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
-          </svg>
-          <span className="nav-label">Menu</span>
-        </button>
+
       </nav>
 
       {toast && (
@@ -578,3 +583,6 @@ export default function Home() {
     </div>
   )
 }
+
+
+
