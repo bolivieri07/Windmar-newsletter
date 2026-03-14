@@ -98,33 +98,6 @@ export default function Home() {
     setRsvpForm({ name: "", email: "" })
     setRsvpSending(false)
   }
-  const [rsvpModal, setRsvpModal] = useState(false)
-  const [rsvpEvent, setRsvpEvent] = useState<Event | null>(null)
-  const [rsvpForm, setRsvpForm] = useState({ name: "", email: "" })
-  const [rsvpSending, setRsvpSending] = useState(false)
-
-  async function handleRsvp() {
-    if (!rsvpForm.name.trim() || !rsvpForm.email.trim()) { showToast("Name and email required"); return }
-    if (!rsvpEvent) return
-    setRsvpSending(true)
-    const { error } = await supabase.from("event_rsvps").insert({
-      event_id: rsvpEvent.id,
-      name: rsvpForm.name,
-      email: rsvpForm.email,
-    })
-    if (error) {
-      if (error.code === "23505") { showToast("You already RSVPed!") }
-      else { showToast("Error: " + error.message) }
-      setRsvpSending(false)
-      return
-    }
-    await supabase.from("events").update({ rsvp_count: (rsvpEvent.rsvp_count || 0) + 1 }).eq("id", rsvpEvent.id)
-    setEvents(prev => prev.map(e => e.id === rsvpEvent.id ? { ...e, rsvp_count: (e.rsvp_count || 0) + 1 } : e))
-    showToast("RSVP confirmed!")
-    setRsvpModal(false)
-    setRsvpForm({ name: "", email: "" })
-    setRsvpSending(false)
-  }
   const supabase = createClient()
 
   useEffect(() => { fetchData() }, [])
@@ -728,6 +701,7 @@ export default function Home() {
     </div>
   )
 }
+
 
 
 
