@@ -10,6 +10,7 @@ type Post = {
   post_type: string
   published_at: string
   cover_image_url: string | null
+  video_url: string | null
   is_featured: boolean
   categories: { name: string; color: string; icon: string } | null
 }
@@ -73,7 +74,7 @@ export default function Home() {
   async function fetchData() {
     setLoading(true)
     const [postsRes, eventsRes, giveawaysRes] = await Promise.all([
-      supabase.from("posts").select("*, categories(name,color,icon)").eq("status","published").lte("published_at", new Date().toISOString()).order("published_at",{ascending:false}).limit(20),
+      supabase.from("posts").select("*, categories(name,color,icon), video_url").eq("status","published").lte("published_at", new Date().toISOString()).order("published_at",{ascending:false}).limit(20),
       supabase.from("events").select("*, posts(title,excerpt)").gte("event_date", new Date().toISOString()).order("event_date",{ascending:true}).limit(10),
       supabase.from("giveaways").select("*, posts(title,excerpt)").in("status",["active","upcoming"]).order("entry_deadline",{ascending:true}).limit(10),
     ])
@@ -110,13 +111,40 @@ export default function Home() {
   const filteredPosts = feedFilter === "all" ? posts : posts.filter(p => p.post_type === feedFilter)
   const recentPosts = posts.slice(0,4)
 
+  function getEmbedUrl(url: string): string | null {
+    if (!url) return null
+    const ytMatch = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})/)
+    if (ytMatch) return "https://www.youtube.com/embed/" + ytMatch[1]
+    const vimeoMatch = url.match(/vimeo\.com\/(\d+)/)
+    if (vimeoMatch) return "https://player.vimeo.com/video/" + vimeoMatch[1]
+    return null
+  }
+
+  function isDirectVideo(url: string): boolean {
+    if (!url) return false
+    return /\.(mp4|webm|mov|ogg)(\?.*)?$/i.test(url) || (url.includes("supabase") && url.includes("post-videos"))
+  }
+
   function FeedCard({ post }: { post: Post }) {
+    const [expanded, setExpanded] = useState(false)
+    const embedUrl = post.video_url ? getEmbedUrl(post.video_url) : null
+    const directVideo = post.video_url ? isDirectVideo(post.video_url) : false
+    const hasBody = post.body && post.body.trim().length > 0 && post.body !== post.excerpt
+
     return (
       <div className="feed-card">
         {post.cover_image_url && (
           <img src={post.cover_image_url} alt={post.title}
             style={{width:"100%",maxHeight:260,objectFit:"cover",display:"block"}}
             onError={(e: any) => { console.error("Image failed:", post.cover_image_url); e.target.style.display="none" }} />
+        )}
+        {embedUrl && (
+          <div style={{width:"100%",position:"relative",paddingBottom:"56.25%",background:"#000"}}>
+            <iframe src={embedUrl} style={{position:"absolute",top:0,left:0,width:"100%",height:"100%",border:"none"}} allowFullScreen />
+          </div>
+        )}
+        {directVideo && post.video_url && !embedUrl && (
+          <video src={post.video_url} controls style={{width:"100%",maxHeight:300,display:"block",background:"#000"}} />
         )}
         <div className="feed-card-header">
           <div className="feed-author-avatar" style={{background:getAvatarColor(post.post_type)}}>{getInitials(post.post_type)}</div>
@@ -129,6 +157,18 @@ export default function Home() {
         <div className="feed-body">
           <div className="feed-title">{post.title}</div>
           <div className="feed-text">{post.excerpt}</div>
+          {hasBody && (
+            <>
+              {expanded && (
+                <div className="feed-text" style={{marginTop:"0.75rem",whiteSpace:"pre-wrap"}}>{post.body}</div>
+              )}
+              <button onClick={() => setExpanded(!expanded)}
+                style={{background:"none",border:"none",color:"#f89b24",fontWeight:700,fontSize:"0.85rem",cursor:"pointer",
+                  padding:"0.4rem 0",marginTop:"0.4rem",fontFamily:"Barlow,system-ui,sans-serif"}}>
+                {expanded ? "Show Less" : "Read More"}
+              </button>
+            </>
+          )}
         </div>
         <div className="feed-footer">
           <button className={"feed-action " + (likedPosts.has(post.id) ? "liked" : "")} onClick={() => toggleLike(post.id)}>
@@ -583,6 +623,9 @@ export default function Home() {
     </div>
   )
 }
+
+
+
 
 
 

@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 import { useEffect, useState } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { useRouter, useSearchParams } from "next/navigation"
@@ -9,15 +9,17 @@ export default function NewPostPage() {
     title: "",
     excerpt: "",
     body: "",
-    post_type: "announcement",
     status: "draft",
     is_featured: false,
     is_pinned: false,
     cover_image_url: "",
+    video_url: "",
     scheduled_for: "",
   })
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
+  const [uploadingVideo, setUploadingVideo] = useState(false)
+  const [videoInputMode, setVideoInputMode] = useState<"upload"|"link">("link")
   const [toast, setToast] = useState("")
   const [editId, setEditId] = useState<string | null>(null)
   const router = useRouter()
@@ -36,13 +38,16 @@ export default function NewPostPage() {
         title: data.title || "",
         excerpt: data.excerpt || "",
         body: data.body || "",
-        post_type: data.post_type || "announcement",
         status: data.status || "draft",
         is_featured: data.is_featured || false,
         is_pinned: data.is_pinned || false,
         cover_image_url: data.cover_image_url || "",
+        video_url: data.video_url || "",
         scheduled_for: data.scheduled_for || "",
       })
+      if (data.video_url && !data.video_url.includes("youtube") && !data.video_url.includes("vimeo") && !data.video_url.includes("youtu.be")) {
+        setVideoInputMode("upload")
+      }
     }
   }
 
@@ -64,6 +69,38 @@ export default function NewPostPage() {
     showToast("Image uploaded!")
   }
 
+  async function uploadVideo(file: File) {
+    setUploadingVideo(true)
+    const ext = file.name.split(".").pop()
+    const fileName = "video-" + Date.now() + "." + ext
+    const { error } = await supabase.storage
+      .from("post-videos")
+      .upload(fileName, file, { cacheControl: "3600", upsert: false })
+    if (error) {
+      showToast("Video upload failed: " + error.message)
+      setUploadingVideo(false)
+      return
+    }
+    const { data: urlData } = supabase.storage.from("post-videos").getPublicUrl(fileName)
+    setForm(prev => ({...prev, video_url: urlData.publicUrl}))
+    setUploadingVideo(false)
+    showToast("Video uploaded!")
+  }
+
+  function getEmbedUrl(url: string): string | null {
+    if (!url) return null
+    const ytMatch = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})/)
+    if (ytMatch) return "https://www.youtube.com/embed/" + ytMatch[1]
+    const vimeoMatch = url.match(/vimeo\.com\/(\d+)/)
+    if (vimeoMatch) return "https://player.vimeo.com/video/" + vimeoMatch[1]
+    return null
+  }
+
+  function isDirectVideo(url: string): boolean {
+    if (!url) return false
+    return /\.(mp4|webm|mov|ogg)(\?.*)?$/i.test(url) || (url.includes("supabase") && url.includes("post-videos"))
+  }
+
   function showToast(msg: string) {
     setToast(msg)
     setTimeout(() => setToast(""), 3000)
@@ -81,11 +118,12 @@ export default function NewPostPage() {
       slug: slugify(form.title) + "-" + Date.now(),
       excerpt: form.excerpt,
       body: form.body,
-      post_type: form.post_type,
+      post_type: "announcement",
       status: publishNow ? "published" : form.status,
       is_featured: form.is_featured,
       is_pinned: form.is_pinned,
       cover_image_url: form.cover_image_url || null,
+      video_url: form.video_url || null,
       scheduled_for: form.scheduled_for || null,
     }
     if (publishNow || form.status === "published") {
@@ -105,8 +143,6 @@ export default function NewPostPage() {
     setTimeout(() => router.push("/admin/posts"), 1200)
   }
 
-  const postTypes = ["announcement","daily","weekly","event","giveaway","training"]
-
   const inputStyle = {
     width:"100%", padding:"0.8rem 1rem", border:"1.5px solid #e5e7eb",
     borderRadius:8, fontSize:"0.95rem", fontFamily:"Barlow,system-ui,sans-serif",
@@ -118,6 +154,9 @@ export default function NewPostPage() {
     fontWeight:700, marginBottom:"0.4rem", textTransform:"uppercase" as const,
     letterSpacing:"0.04em"
   }
+
+  const embedUrl = getEmbedUrl(form.video_url)
+  const directVideo = isDirectVideo(form.video_url)
 
   return (
     <div style={{maxWidth:800,margin:"0 auto"}}>
@@ -156,11 +195,11 @@ export default function NewPostPage() {
           <div style={{marginBottom:"1rem"}}>
             <label style={labelStyle}>Full Body Content</label>
             <textarea value={form.body} onChange={e => setForm({...form,body:e.target.value})}
-              placeholder="Full post content..."
+              placeholder="Full post content (visible when user clicks Read More)..."
               style={{...inputStyle,minHeight:200,resize:"vertical"}} />
           </div>
 
-          <div style={{marginBottom:"0"}}>
+          <div style={{marginBottom:"1rem"}}>
             <label style={labelStyle}>Cover Image</label>
             <div
               style={{border:"2px dashed #e5e7eb",borderRadius:8,padding:"1.5rem",textAlign:"center",cursor:"pointer",background:"#f9fafb",transition:"border-color 0.2s"}}
@@ -169,13 +208,8 @@ export default function NewPostPage() {
               onDragLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor="#e5e7eb" }}
               onDrop={async (e) => { e.preventDefault(); const file = e.dataTransfer.files[0]; if(file) await uploadImage(file); }}
             >
-              <input
-                id="cover-upload"
-                type="file"
-                accept="image/*"
-                style={{display:"none"}}
-                onChange={async (e) => { const file = e.target.files?.[0]; if(file) await uploadImage(file); }}
-              />
+              <input id="cover-upload" type="file" accept="image/*" style={{display:"none"}}
+                onChange={async (e) => { const file = e.target.files?.[0]; if(file) await uploadImage(file); }} />
               {form.cover_image_url ? (
                 <div style={{position:"relative"}}>
                   <img src={form.cover_image_url} alt="preview"
@@ -204,21 +238,86 @@ export default function NewPostPage() {
               )}
             </div>
           </div>
+
+          <div style={{marginBottom:"0"}}>
+            <label style={labelStyle}>Video (optional)</label>
+            <div style={{display:"flex",gap:"0.5rem",marginBottom:"0.75rem"}}>
+              <button onClick={() => setVideoInputMode("link")}
+                style={{padding:"0.4rem 1rem",borderRadius:20,fontSize:"0.82rem",fontWeight:700,cursor:"pointer",
+                  border:"1.5px solid",borderColor:videoInputMode==="link"?"#f89b24":"#e5e7eb",
+                  background:videoInputMode==="link"?"#f89b24":"white",
+                  color:videoInputMode==="link"?"white":"#6b7280",fontFamily:"Barlow,system-ui,sans-serif"}}>
+                Paste Link
+              </button>
+              <button onClick={() => setVideoInputMode("upload")}
+                style={{padding:"0.4rem 1rem",borderRadius:20,fontSize:"0.82rem",fontWeight:700,cursor:"pointer",
+                  border:"1.5px solid",borderColor:videoInputMode==="upload"?"#f89b24":"#e5e7eb",
+                  background:videoInputMode==="upload"?"#f89b24":"white",
+                  color:videoInputMode==="upload"?"white":"#6b7280",fontFamily:"Barlow,system-ui,sans-serif"}}>
+                Upload Video
+              </button>
+            </div>
+
+            {videoInputMode === "link" ? (
+              <div>
+                <input type="text" value={form.video_url} onChange={e => setForm({...form,video_url:e.target.value})}
+                  placeholder="Paste YouTube or Vimeo URL..." style={inputStyle} />
+                {embedUrl && (
+                  <div style={{marginTop:"0.75rem",borderRadius:8,overflow:"hidden"}}>
+                    <iframe src={embedUrl} style={{width:"100%",height:220,border:"none",borderRadius:8}} allowFullScreen />
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div>
+                <div
+                  style={{border:"2px dashed #e5e7eb",borderRadius:8,padding:"1.5rem",textAlign:"center",cursor:"pointer",background:"#f9fafb"}}
+                  onClick={() => { const el = document.getElementById("video-upload"); if(el) (el as HTMLInputElement).click(); }}
+                  onDragOver={(e) => { e.preventDefault(); (e.currentTarget as HTMLElement).style.borderColor="#f89b24" }}
+                  onDragLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor="#e5e7eb" }}
+                  onDrop={async (e) => { e.preventDefault(); const file = e.dataTransfer.files[0]; if(file) await uploadVideo(file); }}
+                >
+                  <input id="video-upload" type="file" accept="video/*" style={{display:"none"}}
+                    onChange={async (e) => { const file = e.target.files?.[0]; if(file) await uploadVideo(file); }} />
+                  {directVideo && form.video_url ? (
+                    <div style={{position:"relative"}}>
+                      <video src={form.video_url} controls style={{width:"100%",maxHeight:220,borderRadius:8}} />
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setForm(p => ({...p,video_url:""})) }}
+                        style={{position:"absolute",top:8,right:8,background:"rgba(0,0,0,0.65)",color:"white",border:"none",borderRadius:"50%",width:30,height:30,cursor:"pointer",fontSize:"0.85rem",fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center"}}>
+                        X
+                      </button>
+                    </div>
+                  ) : uploadingVideo ? (
+                    <div style={{padding:"2rem 0"}}>
+                      <div style={{color:"#f89b24",fontWeight:700,fontSize:"1rem"}}>Uploading video...</div>
+                      <div style={{color:"#9ca3af",fontSize:"0.82rem",marginTop:"0.3rem"}}>This may take a moment</div>
+                    </div>
+                  ) : (
+                    <div style={{padding:"1rem 0"}}>
+                      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="1.5" style={{margin:"0 auto 0.75rem",display:"block"}}>
+                        <polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+                      </svg>
+                      <div style={{color:"#374151",fontWeight:700,fontSize:"1rem"}}>Click to upload or drag and drop</div>
+                      <div style={{color:"#9ca3af",fontSize:"0.82rem",marginTop:"0.3rem"}}>MP4, WebM, MOV up to 50MB</div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+            {form.video_url && (
+              <button onClick={() => setForm(p => ({...p, video_url:""}))}
+                style={{marginTop:"0.5rem",padding:"0.3rem 0.8rem",background:"none",border:"1.5px solid #fecaca",borderRadius:6,fontSize:"0.78rem",fontWeight:700,color:"#dc2626",cursor:"pointer",fontFamily:"Barlow,system-ui,sans-serif"}}>
+                Remove Video
+              </button>
+            )}
+          </div>
         </div>
 
         <div style={{background:"white",borderRadius:14,padding:"1.25rem",boxShadow:"0 2px 8px rgba(0,0,0,0.06)",border:"1px solid #f3f4f6"}}>
           <h2 style={{color:"#1a2f6e",fontSize:"0.9rem",fontWeight:800,textTransform:"uppercase",letterSpacing:"0.04em",margin:"0 0 1rem 0"}}>Settings</h2>
 
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"1rem",marginBottom:"1rem"}}>
-            <div>
-              <label style={labelStyle}>Post Type</label>
-              <select value={form.post_type} onChange={e => setForm({...form,post_type:e.target.value})}
-                style={{...inputStyle,cursor:"pointer"}}>
-                {postTypes.map(t => (
-                  <option key={t} value={t}>{t.charAt(0).toUpperCase()+t.slice(1)}</option>
-                ))}
-              </select>
-            </div>
             <div>
               <label style={labelStyle}>Status</label>
               <select value={form.status} onChange={e => setForm({...form,status:e.target.value})}
@@ -229,12 +328,11 @@ export default function NewPostPage() {
                 <option value="archived">Archived</option>
               </select>
             </div>
-          </div>
-
-          <div style={{marginBottom:"1rem"}}>
-            <label style={labelStyle}>Schedule For (optional)</label>
-            <input type="datetime-local" value={form.scheduled_for}
-              onChange={e => setForm({...form,scheduled_for:e.target.value})} style={inputStyle} />
+            <div>
+              <label style={labelStyle}>Schedule For (optional)</label>
+              <input type="datetime-local" value={form.scheduled_for}
+                onChange={e => setForm({...form,scheduled_for:e.target.value})} style={inputStyle} />
+            </div>
           </div>
 
           <div style={{display:"flex",gap:"1.5rem"}}>
@@ -254,11 +352,11 @@ export default function NewPostPage() {
         </div>
 
         <div style={{display:"flex",gap:"0.75rem",flexWrap:"wrap",paddingBottom:"2rem"}}>
-          <button onClick={() => handleSave(true)} disabled={saving||uploading}
+          <button onClick={() => handleSave(true)} disabled={saving||uploading||uploadingVideo}
             style={{padding:"0.9rem 1.75rem",background:"#f89b24",color:"white",border:"none",borderRadius:8,fontSize:"1rem",fontWeight:700,cursor:saving?"not-allowed":"pointer",opacity:saving?0.7:1,fontFamily:"Barlow,system-ui,sans-serif"}}>
             {saving ? "Saving..." : "Publish Now"}
           </button>
-          <button onClick={() => handleSave(false)} disabled={saving||uploading}
+          <button onClick={() => handleSave(false)} disabled={saving||uploading||uploadingVideo}
             style={{padding:"0.9rem 1.75rem",background:"white",color:"#1a2f6e",border:"1.5px solid #e5e7eb",borderRadius:8,fontSize:"1rem",fontWeight:700,cursor:saving?"not-allowed":"pointer",opacity:saving?0.7:1,fontFamily:"Barlow,system-ui,sans-serif"}}>
             Save Draft
           </button>
