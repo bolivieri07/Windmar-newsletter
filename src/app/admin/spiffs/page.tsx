@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 import { useEffect, useState } from "react"
 import { createClient } from "@/lib/supabase/client"
 import Link from "next/link"
@@ -69,6 +69,7 @@ export default function SpiffsPage() {
         title: form.post_title,
         slug: form.post_title.toLowerCase().replace(/[^a-z0-9]+/g,"-") + "-" + Date.now(),
         excerpt: form.post_excerpt,
+        cover_image_url: form.prize_image_url || null,
         post_type: "giveaway",
         status: "published",
         published_at: new Date().toISOString(),
@@ -312,3 +313,4 @@ export default function SpiffsPage() {
     </div>
   )
 }
+

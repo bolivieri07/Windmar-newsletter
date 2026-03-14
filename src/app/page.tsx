@@ -21,7 +21,11 @@ type Event = {
   location: string | null
   is_virtual: boolean
   virtual_link: string | null
-  posts: { title: string; excerpt: string } | null
+  is_rsvp_open: boolean
+  rsvp_count: number
+  max_attendees: number | null
+  cover_image_url: string | null
+  posts: { title: string; excerpt: string; cover_image_url: string | null } | null
 }
 
 type Giveaway = {
@@ -67,6 +71,60 @@ export default function Home() {
   const [likedPosts, setLikedPosts] = useState<Set<string>>(new Set())
   const [toast, setToast] = useState("")
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [rsvpModal, setRsvpModal] = useState(false)
+  const [rsvpEvent, setRsvpEvent] = useState<Event | null>(null)
+  const [rsvpForm, setRsvpForm] = useState({ name: "", email: "" })
+  const [rsvpSending, setRsvpSending] = useState(false)
+
+  async function handleRsvp() {
+    if (!rsvpForm.name.trim() || !rsvpForm.email.trim()) { showToast("Name and email required"); return }
+    if (!rsvpEvent) return
+    setRsvpSending(true)
+    const { error } = await supabase.from("event_rsvps").insert({
+      event_id: rsvpEvent.id,
+      name: rsvpForm.name,
+      email: rsvpForm.email,
+    })
+    if (error) {
+      if (error.code === "23505") { showToast("You already RSVPed!") }
+      else { showToast("Error: " + error.message) }
+      setRsvpSending(false)
+      return
+    }
+    await supabase.from("events").update({ rsvp_count: (rsvpEvent.rsvp_count || 0) + 1 }).eq("id", rsvpEvent.id)
+    setEvents(prev => prev.map(e => e.id === rsvpEvent.id ? { ...e, rsvp_count: (e.rsvp_count || 0) + 1 } : e))
+    showToast("RSVP confirmed!")
+    setRsvpModal(false)
+    setRsvpForm({ name: "", email: "" })
+    setRsvpSending(false)
+  }
+  const [rsvpModal, setRsvpModal] = useState(false)
+  const [rsvpEvent, setRsvpEvent] = useState<Event | null>(null)
+  const [rsvpForm, setRsvpForm] = useState({ name: "", email: "" })
+  const [rsvpSending, setRsvpSending] = useState(false)
+
+  async function handleRsvp() {
+    if (!rsvpForm.name.trim() || !rsvpForm.email.trim()) { showToast("Name and email required"); return }
+    if (!rsvpEvent) return
+    setRsvpSending(true)
+    const { error } = await supabase.from("event_rsvps").insert({
+      event_id: rsvpEvent.id,
+      name: rsvpForm.name,
+      email: rsvpForm.email,
+    })
+    if (error) {
+      if (error.code === "23505") { showToast("You already RSVPed!") }
+      else { showToast("Error: " + error.message) }
+      setRsvpSending(false)
+      return
+    }
+    await supabase.from("events").update({ rsvp_count: (rsvpEvent.rsvp_count || 0) + 1 }).eq("id", rsvpEvent.id)
+    setEvents(prev => prev.map(e => e.id === rsvpEvent.id ? { ...e, rsvp_count: (e.rsvp_count || 0) + 1 } : e))
+    showToast("RSVP confirmed!")
+    setRsvpModal(false)
+    setRsvpForm({ name: "", email: "" })
+    setRsvpSending(false)
+  }
   const supabase = createClient()
 
   useEffect(() => { fetchData() }, [])
@@ -75,7 +133,7 @@ export default function Home() {
     setLoading(true)
     const [postsRes, eventsRes, giveawaysRes] = await Promise.all([
       supabase.from("posts").select("*, categories(name,color,icon), video_url").eq("status","published").lte("published_at", new Date().toISOString()).order("published_at",{ascending:false}).limit(20),
-      supabase.from("events").select("*, posts(title,excerpt)").gte("event_date", new Date().toISOString()).order("event_date",{ascending:true}).limit(10),
+      supabase.from("events").select("*, posts(title,excerpt,cover_image_url)").gte("event_date", new Date().toISOString()).order("event_date",{ascending:true}).limit(10),
       supabase.from("giveaways").select("*, posts(title,excerpt)").in("status",["active","upcoming"]).order("entry_deadline",{ascending:true}).limit(10),
     ])
     if (postsRes.data) setPosts(postsRes.data)
@@ -529,29 +587,43 @@ export default function Home() {
               <div style={{display:"grid",gap:"1rem"}}>
                 {events.map(event => {
                   const d = new Date(event.event_date)
+                  const coverImg = event.cover_image_url || event.posts?.cover_image_url
                   return (
-                    <div key={event.id} style={{background:"white",borderRadius:14,boxShadow:"0 2px 12px rgba(0,0,0,0.08)",border:"1px solid #f3f4f6",overflow:"hidden",display:"flex"}}>
-                      <div style={{background:"linear-gradient(135deg,#1a2f6e 0%,#2a4a9e 100%)",padding:"1.5rem",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",minWidth:90}}>
-                        <div style={{fontSize:"2rem",fontWeight:800,color:"white",lineHeight:1}}>{d.getDate()}</div>
-                        <div style={{fontSize:"0.8rem",color:"#f89b24",fontWeight:700,textTransform:"uppercase"}}>{d.toLocaleDateString("en-US",{month:"short"})}</div>
-                        <div style={{fontSize:"0.7rem",color:"rgba(255,255,255,0.6)",fontWeight:600}}>{d.getFullYear()}</div>
-                      </div>
-                      <div style={{padding:"1.25rem",flex:1}}>
-                        <div style={{fontWeight:800,fontSize:"1.05rem",color:"#1f2937",marginBottom:"0.3rem"}}>{event.posts?.title}</div>
-                        <div style={{fontSize:"0.85rem",color:"#6b7280",marginBottom:"0.5rem"}}>{event.posts?.excerpt}</div>
-                        <div style={{display:"flex",gap:"1rem",flexWrap:"wrap",fontSize:"0.82rem",color:"#9ca3af",fontWeight:600}}>
-                          <span>{d.toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit"})}</span>
-                          {event.is_virtual ? <span>Virtual Event</span> : event.location && <span>{event.location}</span>}
-                        </div>
-                      </div>
-                      {event.is_virtual && event.virtual_link && (
-                        <div style={{padding:"1.25rem",display:"flex",alignItems:"center"}}>
-                          <a href={event.virtual_link} target="_blank" rel="noreferrer"
-                            style={{padding:"0.6rem 1.25rem",background:"#f89b24",color:"white",borderRadius:8,fontWeight:700,fontSize:"0.85rem",textDecoration:"none",whiteSpace:"nowrap"}}>
-                            Join Event
-                          </a>
-                        </div>
+                    <div key={event.id} style={{background:"white",borderRadius:14,boxShadow:"0 2px 12px rgba(0,0,0,0.08)",border:"1px solid #f3f4f6",overflow:"hidden"}}>
+                      {coverImg && (
+                        <img src={coverImg} alt={event.posts?.title || "Event"} style={{width:"100%",height:180,objectFit:"cover",display:"block"}}
+                          onError={(e:any)=>{e.target.style.display="none"}} />
                       )}
+                      <div style={{display:"flex"}}>
+                        <div style={{background:"linear-gradient(135deg,#1a2f6e 0%,#2a4a9e 100%)",padding:"1.5rem",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",minWidth:90}}>
+                          <div style={{fontSize:"2rem",fontWeight:800,color:"white",lineHeight:1}}>{d.getDate()}</div>
+                          <div style={{fontSize:"0.8rem",color:"#f89b24",fontWeight:700,textTransform:"uppercase"}}>{d.toLocaleDateString("en-US",{month:"short"})}</div>
+                          <div style={{fontSize:"0.7rem",color:"rgba(255,255,255,0.6)",fontWeight:600}}>{d.getFullYear()}</div>
+                        </div>
+                        <div style={{padding:"1.25rem",flex:1}}>
+                          <div style={{fontWeight:800,fontSize:"1.05rem",color:"#1f2937",marginBottom:"0.3rem"}}>{event.posts?.title}</div>
+                          <div style={{fontSize:"0.85rem",color:"#6b7280",marginBottom:"0.5rem"}}>{event.posts?.excerpt}</div>
+                          <div style={{display:"flex",gap:"1rem",flexWrap:"wrap",fontSize:"0.82rem",color:"#9ca3af",fontWeight:600,marginBottom:"0.75rem"}}>
+                            <span>{d.toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit"})}</span>
+                            {event.is_virtual ? <span>Virtual Event</span> : event.location && <span>{event.location}</span>}
+                            {event.rsvp_count > 0 && <span>{event.rsvp_count} attending</span>}
+                          </div>
+                          <div style={{display:"flex",gap:"0.5rem",flexWrap:"wrap"}}>
+                            {event.is_rsvp_open && (
+                              <button onClick={() => { setRsvpEvent(event); setRsvpModal(true) }}
+                                style={{padding:"0.5rem 1.25rem",background:"#f89b24",color:"white",border:"none",borderRadius:8,fontWeight:700,fontSize:"0.85rem",cursor:"pointer",fontFamily:"Barlow,system-ui,sans-serif"}}>
+                                RSVP Now
+                              </button>
+                            )}
+                            {event.is_virtual && event.virtual_link && (
+                              <a href={event.virtual_link} target="_blank" rel="noreferrer"
+                                style={{padding:"0.5rem 1.25rem",background:"rgba(26,47,110,0.1)",color:"#1a2f6e",borderRadius:8,fontWeight:700,fontSize:"0.85rem",textDecoration:"none",border:"1.5px solid #e5e7eb"}}>
+                                Join Event
+                              </a>
+                            )}
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   )
                 })}
@@ -617,12 +689,50 @@ export default function Home() {
 
       </nav>
 
+      {rsvpModal && rsvpEvent && (
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center",padding:"1rem"}}
+          onClick={() => setRsvpModal(false)}>
+          <div onClick={(e) => e.stopPropagation()}
+            style={{background:"white",borderRadius:16,padding:"2rem",maxWidth:420,width:"100%",boxShadow:"0 16px 64px rgba(0,0,0,0.2)"}}>
+            <h2 style={{color:"#1a2f6e",fontSize:"1.25rem",fontWeight:800,margin:"0 0 0.25rem 0"}}>RSVP</h2>
+            <p style={{color:"#6b7280",fontSize:"0.88rem",margin:"0 0 1.25rem 0"}}>{rsvpEvent.posts?.title}</p>
+            <div style={{marginBottom:"1rem"}}>
+              <label style={{display:"block",color:"#374151",fontSize:"0.78rem",fontWeight:700,marginBottom:"0.4rem",textTransform:"uppercase",letterSpacing:"0.04em"}}>Your Name *</label>
+              <input type="text" value={rsvpForm.name} onChange={e => setRsvpForm({...rsvpForm,name:e.target.value})}
+                placeholder="Full name"
+                style={{width:"100%",padding:"0.8rem 1rem",border:"1.5px solid #e5e7eb",borderRadius:8,fontSize:"0.95rem",fontFamily:"Barlow,system-ui,sans-serif",outline:"none",color:"#1f2937",boxSizing:"border-box",background:"white"}} />
+            </div>
+            <div style={{marginBottom:"1.25rem"}}>
+              <label style={{display:"block",color:"#374151",fontSize:"0.78rem",fontWeight:700,marginBottom:"0.4rem",textTransform:"uppercase",letterSpacing:"0.04em"}}>Email *</label>
+              <input type="email" value={rsvpForm.email} onChange={e => setRsvpForm({...rsvpForm,email:e.target.value})}
+                placeholder="your@email.com"
+                style={{width:"100%",padding:"0.8rem 1rem",border:"1.5px solid #e5e7eb",borderRadius:8,fontSize:"0.95rem",fontFamily:"Barlow,system-ui,sans-serif",outline:"none",color:"#1f2937",boxSizing:"border-box",background:"white"}} />
+            </div>
+            <div style={{display:"flex",gap:"0.75rem"}}>
+              <button onClick={handleRsvp} disabled={rsvpSending}
+                style={{flex:1,padding:"0.8rem",background:"#f89b24",color:"white",border:"none",borderRadius:8,fontSize:"0.95rem",fontWeight:700,cursor:rsvpSending?"not-allowed":"pointer",opacity:rsvpSending?0.7:1,fontFamily:"Barlow,system-ui,sans-serif"}}>
+                {rsvpSending ? "Sending..." : "Confirm RSVP"}
+              </button>
+              <button onClick={() => setRsvpModal(false)}
+                style={{padding:"0.8rem 1.25rem",background:"white",color:"#6b7280",border:"1.5px solid #e5e7eb",borderRadius:8,fontSize:"0.95rem",fontWeight:700,cursor:"pointer",fontFamily:"Barlow,system-ui,sans-serif"}}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {toast && (
         <div className={"toast show"}>{toast}</div>
       )}
     </div>
   )
 }
+
+
+
+
+
 
 
 

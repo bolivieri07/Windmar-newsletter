@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 import { useEffect, useState } from "react"
 import { createClient } from "@/lib/supabase/client"
 
@@ -6,11 +6,13 @@ export default function EventsPage() {
   const [events, setEvents] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [uploading, setUploading] = useState(false)
   const [toast, setToast] = useState("")
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState({
     post_title: "",
     post_excerpt: "",
+    cover_image_url: "",
     event_date: "",
     event_end_date: "",
     location: "",
@@ -28,7 +30,7 @@ export default function EventsPage() {
     setLoading(true)
     const { data } = await supabase
       .from("events")
-      .select("*, posts(title,excerpt,status)")
+      .select("*, posts(title,excerpt,status,cover_image_url)")
       .order("event_date", { ascending: true })
     setEvents(data || [])
     setLoading(false)
@@ -37,6 +39,24 @@ export default function EventsPage() {
   function showToast(msg: string) {
     setToast(msg)
     setTimeout(() => setToast(""), 3000)
+  }
+
+  async function uploadImage(file: File) {
+    setUploading(true)
+    const ext = file.name.split(".").pop()
+    const fileName = "event-" + Date.now() + "." + ext
+    const { error } = await supabase.storage
+      .from("post-image")
+      .upload(fileName, file, { cacheControl: "3600", upsert: false })
+    if (error) {
+      showToast("Upload failed: " + error.message)
+      setUploading(false)
+      return
+    }
+    const { data: urlData } = supabase.storage.from("post-image").getPublicUrl(fileName)
+    setForm(prev => ({...prev, cover_image_url: urlData.publicUrl}))
+    setUploading(false)
+    showToast("Image uploaded!")
   }
 
   async function handleCreate() {
@@ -49,6 +69,7 @@ export default function EventsPage() {
         title: form.post_title,
         slug: form.post_title.toLowerCase().replace(/[^a-z0-9]+/g,"-") + "-" + Date.now(),
         excerpt: form.post_excerpt,
+        cover_image_url: form.cover_image_url || null,
         post_type: "event",
         status: "published",
         published_at: new Date().toISOString(),
@@ -68,11 +89,12 @@ export default function EventsPage() {
         virtual_link: form.virtual_link || null,
         max_attendees: form.max_attendees ? parseInt(form.max_attendees) : null,
         is_rsvp_open: form.is_rsvp_open,
+        cover_image_url: form.cover_image_url || null,
       })
     if (eventError) { showToast("Error: " + eventError.message); setSaving(false); return }
     showToast("Event created and published!")
     setShowForm(false)
-    setForm({ post_title:"",post_excerpt:"",event_date:"",event_end_date:"",location:"",address:"",is_virtual:false,virtual_link:"",max_attendees:"",is_rsvp_open:true })
+    setForm({ post_title:"",post_excerpt:"",cover_image_url:"",event_date:"",event_end_date:"",location:"",address:"",is_virtual:false,virtual_link:"",max_attendees:"",is_rsvp_open:true })
     fetchEvents()
     setSaving(false)
   }
@@ -132,6 +154,38 @@ export default function EventsPage() {
               <label style={labelStyle}>Short Description</label>
               <input type="text" value={form.post_excerpt} onChange={e => setForm({...form,post_excerpt:e.target.value})}
                 placeholder="Brief event summary..." style={inputStyle} />
+            </div>
+          </div>
+
+          <div style={{marginBottom:"1rem"}}>
+            <label style={labelStyle}>Cover Image</label>
+            <div style={{border:"2px dashed #e5e7eb",borderRadius:8,padding:"1.25rem",textAlign:"center",cursor:"pointer",background:"#f9fafb"}}
+              onClick={() => document.getElementById("event-cover-upload")?.click()}
+              onDragOver={(e) => { e.preventDefault(); (e.currentTarget as HTMLElement).style.borderColor="#f89b24" }}
+              onDragLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor="#e5e7eb" }}
+              onDrop={async (e) => { e.preventDefault(); const file = e.dataTransfer.files[0]; if(file) await uploadImage(file); }}>
+              <input id="event-cover-upload" type="file" accept="image/*" style={{display:"none"}}
+                onChange={async (e) => { const file = e.target.files?.[0]; if(file) await uploadImage(file); }} />
+              {form.cover_image_url ? (
+                <div style={{position:"relative"}}>
+                  <img src={form.cover_image_url} alt="preview" style={{width:"100%",height:160,objectFit:"cover",borderRadius:8}} />
+                  <button onClick={(e) => { e.stopPropagation(); setForm({...form,cover_image_url:""}) }}
+                    style={{position:"absolute",top:8,right:8,background:"rgba(0,0,0,0.6)",color:"white",border:"none",borderRadius:"50%",width:28,height:28,cursor:"pointer",fontSize:"1rem"}}>
+                    x
+                  </button>
+                </div>
+              ) : uploading ? (
+                <div style={{color:"#f89b24",fontWeight:700}}>Uploading...</div>
+              ) : (
+                <div>
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="1.5" style={{margin:"0 auto 0.4rem",display:"block"}}>
+                    <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/>
+                    <polyline points="21 15 16 10 5 21"/>
+                  </svg>
+                  <div style={{color:"#6b7280",fontWeight:600,fontSize:"0.88rem"}}>Click or drag to upload cover image</div>
+                  <div style={{color:"#9ca3af",fontSize:"0.75rem",marginTop:"0.2rem"}}>This image will show in the feed</div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -213,8 +267,12 @@ export default function EventsPage() {
           {events.map(event => {
             const upcoming = isUpcoming(event.event_date)
             const eventDate = new Date(event.event_date)
+            const coverImg = event.cover_image_url || event.posts?.cover_image_url
             return (
               <div key={event.id} style={{background:"white",borderRadius:14,boxShadow:"0 2px 8px rgba(0,0,0,0.06)",border:"1px solid #f3f4f6",overflow:"hidden"}}>
+                {coverImg && (
+                  <img src={coverImg} alt={event.posts?.title} style={{width:"100%",height:160,objectFit:"cover",display:"block"}} />
+                )}
                 <div style={{borderLeft:"4px solid " + (upcoming?"#f89b24":"#9ca3af"),padding:"1.25rem",display:"flex",gap:"1rem",alignItems:"flex-start",flexWrap:"wrap"}}>
                   <div style={{textAlign:"center",flexShrink:0,minWidth:48}}>
                     <div style={{fontSize:"1.75rem",fontWeight:800,color:upcoming?"#1a2f6e":"#9ca3af",lineHeight:1}}>
@@ -242,8 +300,8 @@ export default function EventsPage() {
                     )}
                     <div style={{display:"flex",gap:"1.25rem",flexWrap:"wrap",fontSize:"0.82rem",color:"#9ca3af",fontWeight:600}}>
                       <span>{eventDate.toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit"})}</span>
-                      {event.location && <span>?? {event.location}</span>}
-                      {event.virtual_link && <span>?? Virtual link set</span>}
+                      {event.location && <span>{event.location}</span>}
+                      {event.virtual_link && <span>Virtual link set</span>}
                       <span>RSVPs: {event.rsvp_count || 0}{event.max_attendees?" / "+event.max_attendees:""}</span>
                     </div>
                   </div>
