@@ -307,7 +307,7 @@ export default function D2DPage() {
 
         {!loading && !error && activeTab === "map" && (
           <div>
-            <div style={{display:"flex",gap:"0.5rem",marginBottom:"1rem",flexWrap:"wrap"}}>
+            <div style={{display:"flex",gap:"0.5rem",marginBottom:"1rem",flexWrap:"wrap",alignItems:"center"}}>
               {Object.entries(statusCounts).map(([status, count]) => (
                 <button key={status} onClick={() => setFilterStatus(filterStatus === status ? "all" : status)}
                   style={{display:"flex",alignItems:"center",gap:"0.3rem",padding:"0.3rem 0.7rem",borderRadius:20,
@@ -319,14 +319,103 @@ export default function D2DPage() {
                   {status} ({count})
                 </button>
               ))}
+              <div style={{marginLeft:"auto",background:"#fef3e2",padding:"0.3rem 0.75rem",borderRadius:20,fontSize:"0.75rem",fontWeight:700,color:"#b45309"}}>
+                Tap map to drop pin
+              </div>
             </div>
-            <div style={{background:"white",borderRadius:14,boxShadow:"0 2px 8px rgba(0,0,0,0.06)",border:"1px solid #f3f4f6",overflow:"hidden"}}>
-              <LeadMap leads={filteredLeads} onSelectLead={(lead: any) => setSelectedLead(lead)} />
+            <div style={{display:"grid",gridTemplateColumns:showCreateLead?"1fr 360px":"1fr",gap:"1rem",alignItems:"start"}}>
+              <div style={{background:"white",borderRadius:14,boxShadow:"0 2px 8px rgba(0,0,0,0.06)",border:"1px solid #f3f4f6",overflow:"hidden"}}>
+                <LeadMap leads={filteredLeads} onSelectLead={(lead: any) => setSelectedLead(lead)} onMapClick={handleMapClick} newPin={newPin} />
+              </div>
+              {showCreateLead && newPin && (
+                <div style={{background:"white",borderRadius:14,boxShadow:"0 2px 8px rgba(0,0,0,0.06)",border:"1px solid #f3f4f6",padding:"1.25rem",position:"sticky",top:80}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"1rem"}}>
+                    <h3 style={{color:"#1a2f6e",fontSize:"1rem",fontWeight:800,margin:0,textTransform:"uppercase",letterSpacing:"0.04em"}}>New Lead</h3>
+                    <button onClick={() => { setShowCreateLead(false); setNewPin(null) }}
+                      style={{background:"#f3f4f6",border:"none",borderRadius:6,width:28,height:28,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:"#6b7280",fontWeight:700}}>X</button>
+                  </div>
+                  <div style={{fontSize:"0.75rem",color:"#9ca3af",marginBottom:"1rem",fontWeight:600}}>
+                    Pin: {newPin.lat.toFixed(5)}, {newPin.lng.toFixed(5)}
+                  </div>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0.75rem",marginBottom:"0.75rem"}}>
+                    <div>
+                      <label style={{display:"block",color:"#374151",fontSize:"0.72rem",fontWeight:700,marginBottom:"0.3rem",textTransform:"uppercase",letterSpacing:"0.04em"}}>First Name</label>
+                      <input type="text" value={newLeadForm.firstName} onChange={e => setNewLeadForm({...newLeadForm,firstName:e.target.value})}
+                        style={{...inputStyle,width:"100%",padding:"0.6rem 0.75rem",fontSize:"0.85rem"}} />
+                    </div>
+                    <div>
+                      <label style={{display:"block",color:"#374151",fontSize:"0.72rem",fontWeight:700,marginBottom:"0.3rem",textTransform:"uppercase",letterSpacing:"0.04em"}}>Last Name</label>
+                      <input type="text" value={newLeadForm.lastName} onChange={e => setNewLeadForm({...newLeadForm,lastName:e.target.value})}
+                        style={{...inputStyle,width:"100%",padding:"0.6rem 0.75rem",fontSize:"0.85rem"}} />
+                    </div>
+                  </div>
+                  <div style={{marginBottom:"0.75rem"}}>
+                    <label style={{display:"block",color:"#374151",fontSize:"0.72rem",fontWeight:700,marginBottom:"0.3rem",textTransform:"uppercase",letterSpacing:"0.04em"}}>Address</label>
+                    <input type="text" value={newLeadForm.address} onChange={e => setNewLeadForm({...newLeadForm,address:e.target.value})}
+                      placeholder="Street address" style={{...inputStyle,width:"100%",padding:"0.6rem 0.75rem",fontSize:"0.85rem"}} />
+                  </div>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:"0.75rem",marginBottom:"0.75rem"}}>
+                    <div>
+                      <label style={{display:"block",color:"#374151",fontSize:"0.72rem",fontWeight:700,marginBottom:"0.3rem",textTransform:"uppercase",letterSpacing:"0.04em"}}>City</label>
+                      <input type="text" value={newLeadForm.city} onChange={e => setNewLeadForm({...newLeadForm,city:e.target.value})}
+                        style={{...inputStyle,width:"100%",padding:"0.6rem 0.75rem",fontSize:"0.85rem"}} />
+                    </div>
+                    <div>
+                      <label style={{display:"block",color:"#374151",fontSize:"0.72rem",fontWeight:700,marginBottom:"0.3rem",textTransform:"uppercase",letterSpacing:"0.04em"}}>State</label>
+                      <input type="text" value={newLeadForm.state} onChange={e => setNewLeadForm({...newLeadForm,state:e.target.value})}
+                        style={{...inputStyle,width:"100%",padding:"0.6rem 0.75rem",fontSize:"0.85rem"}} />
+                    </div>
+                    <div>
+                      <label style={{display:"block",color:"#374151",fontSize:"0.72rem",fontWeight:700,marginBottom:"0.3rem",textTransform:"uppercase",letterSpacing:"0.04em"}}>ZIP</label>
+                      <input type="text" value={newLeadForm.zip} onChange={e => setNewLeadForm({...newLeadForm,zip:e.target.value})}
+                        style={{...inputStyle,width:"100%",padding:"0.6rem 0.75rem",fontSize:"0.85rem"}} />
+                    </div>
+                  </div>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0.75rem",marginBottom:"0.75rem"}}>
+                    <div>
+                      <label style={{display:"block",color:"#374151",fontSize:"0.72rem",fontWeight:700,marginBottom:"0.3rem",textTransform:"uppercase",letterSpacing:"0.04em"}}>Phone</label>
+                      <input type="tel" value={newLeadForm.phone} onChange={e => setNewLeadForm({...newLeadForm,phone:e.target.value})}
+                        style={{...inputStyle,width:"100%",padding:"0.6rem 0.75rem",fontSize:"0.85rem"}} />
+                    </div>
+                    <div>
+                      <label style={{display:"block",color:"#374151",fontSize:"0.72rem",fontWeight:700,marginBottom:"0.3rem",textTransform:"uppercase",letterSpacing:"0.04em"}}>Email</label>
+                      <input type="email" value={newLeadForm.email} onChange={e => setNewLeadForm({...newLeadForm,email:e.target.value})}
+                        style={{...inputStyle,width:"100%",padding:"0.6rem 0.75rem",fontSize:"0.85rem"}} />
+                    </div>
+                  </div>
+                  <div style={{marginBottom:"0.75rem"}}>
+                    <label style={{display:"block",color:"#374151",fontSize:"0.72rem",fontWeight:700,marginBottom:"0.3rem",textTransform:"uppercase",letterSpacing:"0.04em"}}>Assign to Rep</label>
+                    <select value={newLeadForm.assignTo} onChange={e => setNewLeadForm({...newLeadForm,assignTo:e.target.value})}
+                      style={{...inputStyle,width:"100%",padding:"0.6rem 0.75rem",fontSize:"0.85rem",cursor:"pointer"}}>
+                      <option value="">Unassigned</option>
+                      {users.map(u => (
+                        <option key={u.id} value={u.id}>{u.firstName} {u.lastName}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div style={{marginBottom:"0.75rem"}}>
+                    <label style={{display:"block",color:"#374151",fontSize:"0.72rem",fontWeight:700,marginBottom:"0.3rem",textTransform:"uppercase",letterSpacing:"0.04em"}}>Notes</label>
+                    <textarea value={newLeadForm.notes} onChange={e => setNewLeadForm({...newLeadForm,notes:e.target.value})}
+                      placeholder="Door knock notes..."
+                      style={{...inputStyle,width:"100%",padding:"0.6rem 0.75rem",fontSize:"0.85rem",minHeight:70,resize:"vertical"}} />
+                  </div>
+                  <div style={{display:"flex",gap:"0.5rem"}}>
+                    <button onClick={handleCreateLead} disabled={creatingSR}
+                      style={{flex:1,padding:"0.7rem",background:"#f89b24",color:"white",border:"none",borderRadius:8,fontWeight:700,fontSize:"0.9rem",cursor:creatingSR?"not-allowed":"pointer",opacity:creatingSR?0.7:1,fontFamily:"Barlow,system-ui,sans-serif"}}>
+                      {creatingSR ? "Creating..." : "Create Lead"}
+                    </button>
+                    <button onClick={() => { setShowCreateLead(false); setNewPin(null) }}
+                      style={{padding:"0.7rem 1rem",background:"white",color:"#6b7280",border:"1.5px solid #e5e7eb",borderRadius:8,fontWeight:700,fontSize:"0.9rem",cursor:"pointer",fontFamily:"Barlow,system-ui,sans-serif"}}>
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
             <div style={{marginTop:"0.75rem",display:"flex",gap:"0.75rem",flexWrap:"wrap",fontSize:"0.78rem",color:"#9ca3af",fontWeight:600}}>
               <span>{filteredLeads.filter(l => l.lat && l.lng && l.lat !== 0 && l.lng !== 0).length} pins on map</span>
               <span>Click a pin for details</span>
-              <span>Scroll to zoom</span>
+              <span>Tap map to create new lead</span>
             </div>
           </div>
         )}
@@ -496,4 +585,5 @@ export default function D2DPage() {
     </div>
   )
 }
+
 
