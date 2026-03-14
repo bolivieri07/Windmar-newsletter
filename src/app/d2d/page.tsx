@@ -64,6 +64,54 @@ export default function D2DPage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null)
   const [toast, setToast] = useState("")
+  const [newPin, setNewPin] = useState<{lat:number,lng:number}|null>(null)
+  const [showCreateLead, setShowCreateLead] = useState(false)
+  const [creatingSR, setCreatingSR] = useState(false)
+  const [newLeadForm, setNewLeadForm] = useState({
+    firstName:"", lastName:"", address:"", city:"", state:"", zip:"",
+    phone:"", email:"", notes:"", status:"Not Home", assignTo:"",
+  })
+
+  async function handleCreateLead() {
+    if (!newLeadForm.firstName.trim() && !newLeadForm.address.trim()) { showToast("Name or address required"); return }
+    if (!newPin) { showToast("Drop a pin on the map first"); return }
+    setCreatingSR(true)
+    try {
+      const res = await fetch("/api/salesrabbit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          endpoint: "/leads",
+          first_name: newLeadForm.firstName,
+          last_name: newLeadForm.lastName,
+          address_1: newLeadForm.address,
+          city: newLeadForm.city,
+          state: newLeadForm.state,
+          zip: newLeadForm.zip,
+          mobile_phone: newLeadForm.phone,
+          email: newLeadForm.email,
+          description: newLeadForm.notes,
+          addressLatitude: newPin.lat.toString(),
+          addressLongitude: newPin.lng.toString(),
+        }),
+      })
+      const data = await res.json()
+      if (data.error) { showToast("Error: " + data.error); setCreatingSR(false); return }
+      showToast("Lead created in SalesRabbit!")
+      setShowCreateLead(false)
+      setNewPin(null)
+      setNewLeadForm({ firstName:"",lastName:"",address:"",city:"",state:"",zip:"",phone:"",email:"",notes:"",status:"Not Home",assignTo:"" })
+      loadData()
+    } catch (err: any) {
+      showToast("Failed: " + err.message)
+    }
+    setCreatingSR(false)
+  }
+
+  function handleMapClick(lat: number, lng: number) {
+    setNewPin({ lat, lng })
+    setShowCreateLead(true)
+  }
 
   function showToast(msg: string) { setToast(msg); setTimeout(() => setToast(""), 3000) }
 
@@ -585,5 +633,6 @@ export default function D2DPage() {
     </div>
   )
 }
+
 
 

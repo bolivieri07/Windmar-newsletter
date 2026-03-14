@@ -59,8 +59,13 @@ export default function LeadMap({ leads, onSelectLead, onMapClick, newPin }: {
   return (
     <MapContainer center={[avgLat, avgLng]} zoom={12} style={{height:500,width:"100%",borderRadius:14}} scrollWheelZoom={true}>
       <TileLayer
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+        attribution='&copy; Esri, Maxar, Earthstar Geographics'
+        url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+      />
+      <TileLayer
+        attribution=''
+        url="https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}"
+        opacity={0.6}
       />
       {onMapClick && <ClickHandler onMapClick={onMapClick} />}
       {validLeads.map(lead => (
@@ -99,3 +104,4 @@ export default function LeadMap({ leads, onSelectLead, onMapClick, newPin }: {
     </MapContainer>
   )
 }
+
