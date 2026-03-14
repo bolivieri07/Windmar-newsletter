@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 import { useEffect, useState } from "react"
 import { createClient } from "@/lib/supabase/client"
 
@@ -42,6 +42,15 @@ const ASSETS = {
   panel3: "https://assets.cdn.filesafe.space/eTTRenV5nD46gQbZ5A9E/media/650b2b386b45938616a13e05.png",
   panel4: "https://assets.cdn.filesafe.space/eTTRenV5nD46gQbZ5A9E/media/6504716e51a217d93d76dde1.png",
 }
+
+const navTabs = [
+  {id:"home", label:"Home", d:"M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z M9 22V12h6v10"},
+  {id:"feed", label:"Feed", d:"M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"},
+  {id:"spiffs", label:"Spiffs", d:"M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"},
+  {id:"videos", label:"Videos", d:"M23 7l-7 5 7 5V7z M1 5h15a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H1z"},
+  {id:"calendar", label:"Events", d:"M3 4h18a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z M16 2v4M8 2v4M1 10h22"},
+  {id:"resources", label:"Docs", d:"M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"},
+]
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState("home")
@@ -96,18 +105,14 @@ export default function Home() {
 
   const filteredPosts = feedFilter === "all" ? posts : posts.filter(p => p.post_type === feedFilter)
   const recentPosts = posts.slice(0,4)
-  const featuredPost = posts.find(p => p.is_featured) || posts[0]
 
   function FeedCard({ post }: { post: Post }) {
     return (
       <div className="feed-card">
         {post.cover_image_url && (
-          <img
-            src={post.cover_image_url}
-            alt={post.title}
-            style={{width:"100%",maxHeight:260,objectFit:"cover",display:"block",borderRadius:"14px 14px 0 0"}}
-            onError={(e: any) => { console.error("Image failed:", post.cover_image_url); e.target.style.display="none" }}
-          />
+          <img src={post.cover_image_url} alt={post.title}
+            style={{width:"100%",maxHeight:260,objectFit:"cover",display:"block"}}
+            onError={(e: any) => { console.error("Image failed:", post.cover_image_url); e.target.style.display="none" }} />
         )}
         <div className="feed-card-header">
           <div className="feed-author-avatar" style={{background:getAvatarColor(post.post_type)}}>{getInitials(post.post_type)}</div>
@@ -133,15 +138,6 @@ export default function Home() {
     )
   }
 
-  const navTabs = [
-    {id:"home", label:"Home"},
-    {id:"feed", label:"Feed"},
-    {id:"spiffs", label:"Spiffs"},
-    {id:"videos", label:"Training Videos"},
-    {id:"calendar", label:"Events"},
-    {id:"resources", label:"Resources"},
-  ]
-
   return (
     <div style={{minHeight:"100vh",background:"#f9fafb",fontFamily:"Barlow,system-ui,sans-serif"}}>
 
@@ -154,6 +150,18 @@ export default function Home() {
         .hero-desktop { display: none; }
         .hero-mobile { display: block; }
         .desktop-only { display: none; }
+        .desktop-nav-btn {
+          display: flex; align-items: center; gap: 0.5rem;
+          padding: 0.45rem 0.9rem; border-radius: 8px;
+          font-size: 0.82rem; font-weight: 700;
+          cursor: pointer; border: none;
+          font-family: Barlow, system-ui, sans-serif;
+          transition: all 0.15s; white-space: nowrap;
+          background: transparent; color: rgba(255,255,255,0.6);
+        }
+        .desktop-nav-btn:hover { background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.9); }
+        .desktop-nav-btn.active { background: rgba(248,155,36,0.15); color: #f89b24; }
+        .desktop-nav-btn svg { width: 18px; height: 18px; flex-shrink: 0; }
         @media (min-width: 768px) {
           .desktop-nav { display: flex; }
           .mobile-nav { display: none !important; }
@@ -166,7 +174,6 @@ export default function Home() {
           .feed-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
           .desktop-only { display: grid !important; }
         }
-        
         @media (min-width: 1200px) {
           .content-grid { grid-template-columns: 320px 1fr 280px; }
         }
@@ -174,7 +181,19 @@ export default function Home() {
 
       <header style={{background:"linear-gradient(135deg,#0f1d47 0%,#1a2f6e 100%)",position:"sticky",top:0,zIndex:100,boxShadow:"0 2px 16px rgba(0,0,0,0.25)"}}>
         <div style={{maxWidth:1400,margin:"0 auto",padding:"0 1.5rem",display:"flex",alignItems:"center",justifyContent:"space-between",height:64}}>
-          <img src={ASSETS.logo} alt="Windmar Solar Academy" style={{height:40,width:"auto",objectFit:"contain"}} onError={(e:any)=>{e.target.style.display="none"}} />
+          <div style={{display:"flex",alignItems:"center",gap:"1.5rem"}}>
+            <img src={ASSETS.logo} alt="Windmar Solar Academy" style={{height:40,width:"auto",objectFit:"contain",cursor:"pointer"}} onClick={() => setActiveTab("home")} onError={(e:any)=>{e.target.style.display="none"}} />
+            <nav className="desktop-nav" style={{alignItems:"center",gap:"0.25rem"}}>
+              {navTabs.map(tab => (
+                <button key={tab.id} className={"desktop-nav-btn" + (activeTab === tab.id ? " active" : "")} onClick={() => setActiveTab(tab.id)}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    {tab.d.split(/(?=M)/).filter(Boolean).map((seg,i) => <path key={i} d={seg.trim()} />)}
+                  </svg>
+                  {tab.label}
+                </button>
+              ))}
+            </nav>
+          </div>
           <div style={{display:"flex",alignItems:"center",gap:"0.75rem"}}>
             <a href="https://windmarsolaracademy.com" target="_blank" rel="noreferrer"
               style={{padding:"0.5rem 1rem",background:"rgba(255,255,255,0.1)",color:"white",borderRadius:6,fontSize:"0.82rem",fontWeight:700,textDecoration:"none",whiteSpace:"nowrap"}}>
@@ -190,7 +209,6 @@ export default function Home() {
 
       <main style={{maxWidth:1400,margin:"0 auto",padding:"1.5rem"}} onClick={() => setShowMenu(false)}>
 
-        {/* -- HOME -- */}
         {activeTab === "home" && (
           <div>
             <div className="hero-desktop" style={{borderRadius:16,overflow:"hidden",marginBottom:"1.5rem",position:"relative",minHeight:320,background:"linear-gradient(135deg,#0f1d47 0%,#1a2f6e 60%,#2a4a9e 100%)"}}>
@@ -217,7 +235,7 @@ export default function Home() {
                   </div>
                 </div>
                 <div style={{display:"flex",gap:"1rem",flexWrap:"wrap"}}>
-                  {[{val:posts.length||"�",lbl:"Updates"},{val:events.length||"�",lbl:"Events"},{val:giveaways.length||"�",lbl:"Active Spiffs"}].map(s => (
+                  {[{val:posts.length||0,lbl:"Updates"},{val:events.length||0,lbl:"Events"},{val:giveaways.length||0,lbl:"Active Spiffs"}].map(s => (
                     <div key={s.lbl} style={{background:"rgba(255,255,255,0.12)",borderRadius:12,padding:"1.25rem 1.5rem",textAlign:"center",minWidth:100}}>
                       <div style={{fontSize:"2rem",fontWeight:800,color:"#f89b24"}}>{s.val}</div>
                       <div style={{fontSize:"0.72rem",color:"rgba(255,255,255,0.7)",fontWeight:600,textTransform:"uppercase",letterSpacing:"0.04em"}}>{s.lbl}</div>
@@ -226,7 +244,6 @@ export default function Home() {
                 </div>
               </div>
             </div>
-
             <div className="hero-mobile">
               <div style={{background:"linear-gradient(135deg,#0f1d47 0%,#1a2f6e 60%,#2a4a9e 100%)",borderRadius:14,padding:"1.25rem",marginBottom:"1rem",color:"white",position:"relative",overflow:"hidden"}}>
                 <div style={{position:"absolute",right:-10,top:-10,width:120,height:120,borderRadius:"50%",background:"rgba(248,155,36,0.1)"}} />
@@ -235,9 +252,7 @@ export default function Home() {
                 <div style={{fontSize:"1.5rem",fontWeight:800,margin:"0.15rem 0"}}><span style={{color:"#f89b24"}}>Solar</span> Academy</div>
                 <div style={{fontSize:"0.82rem",opacity:0.8}}>We Train You. We Value You. We Promote You.</div>
               </div>
-              
             </div>
-
             <div className="desktop-only" style={{gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))",gap:"1.5rem",marginBottom:"1.5rem"}}>
               {[
                 {img:ASSETS.panel1,title:"Sales Training",desc:"Master the art of solar sales with our proven frameworks and scripts.",tab:"videos"},
@@ -256,21 +271,20 @@ export default function Home() {
                   <div style={{padding:"1rem"}}>
                     <div style={{fontWeight:800,color:"#1a2f6e",fontSize:"1rem",marginBottom:"0.3rem"}}>{card.title}</div>
                     <div style={{fontSize:"0.85rem",color:"#6b7280",lineHeight:1.5}}>{card.desc}</div>
-                    <div style={{color:"#f89b24",fontSize:"0.82rem",fontWeight:700,marginTop:"0.5rem"}}>Explore ?</div>
+                    <div style={{color:"#f89b24",fontSize:"0.82rem",fontWeight:700,marginTop:"0.5rem"}}>{"Explore \u2192"}</div>
                   </div>
                 </div>
               ))}
             </div>
-
             <div>
               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"1rem"}}>
                 <h2 style={{color:"#1a2f6e",fontSize:"1.1rem",fontWeight:800,textTransform:"uppercase",letterSpacing:"0.04em",margin:0}}>Latest Updates</h2>
-                <button onClick={() => setActiveTab("feed")} style={{color:"#f89b24",fontSize:"0.85rem",fontWeight:700,background:"none",border:"none",cursor:"pointer"}}>See All ?</button>
+                <button onClick={() => setActiveTab("feed")} style={{color:"#f89b24",fontSize:"0.85rem",fontWeight:700,background:"none",border:"none",cursor:"pointer"}}>{"See All \u2192"}</button>
               </div>
               {loading ? (
                 <div className="loading-card">Loading updates...</div>
               ) : recentPosts.length === 0 ? (
-                <div className="loading-card">No posts yet � check back soon!</div>
+                <div className="loading-card">No posts yet - check back soon!</div>
               ) : (
                 <div className="feed-grid">
                   {recentPosts.map(post => <FeedCard key={post.id} post={post} />)}
@@ -280,7 +294,6 @@ export default function Home() {
           </div>
         )}
 
-        {/* -- FEED -- */}
         {activeTab === "feed" && (
           <div style={{maxWidth:900,margin:"0 auto"}}>
             <div style={{marginBottom:"1.25rem"}}>
@@ -306,13 +319,12 @@ export default function Home() {
           </div>
         )}
 
-        {/* -- SPIFFS -- */}
         {activeTab === "spiffs" && (
           <div style={{maxWidth:1000,margin:"0 auto"}}>
             <div style={{background:"linear-gradient(135deg,#7c3f00 0%,#d4811a 100%)",borderRadius:16,padding:"2rem",marginBottom:"1.5rem",color:"white",position:"relative",overflow:"hidden"}}>
               <div style={{position:"absolute",right:-20,top:-20,width:200,height:200,borderRadius:"50%",background:"rgba(255,255,255,0.05)"}} />
               <h1 style={{fontSize:"2rem",fontWeight:800,margin:"0 0 0.5rem 0"}}>Active Spiffs</h1>
-              <p style={{opacity:0.85,margin:0,fontSize:"1rem"}}>{giveaways.length > 0 ? giveaways.length + " spiffs running now � get after it!" : "Check back soon for new spiffs!"}</p>
+              <p style={{opacity:0.85,margin:0,fontSize:"1rem"}}>{giveaways.length > 0 ? giveaways.length + " spiffs running now - get after it!" : "Check back soon for new spiffs!"}</p>
             </div>
             {loading ? (
               <div className="loading-card">Loading spiffs...</div>
@@ -346,7 +358,6 @@ export default function Home() {
           </div>
         )}
 
-        {/* -- VIDEOS -- */}
         {activeTab === "videos" && (
           <div style={{maxWidth:1000,margin:"0 auto"}}>
             <div style={{background:"linear-gradient(135deg,#1a2f6e 0%,#2a4a9e 100%)",borderRadius:16,padding:"2rem",marginBottom:"1.5rem",color:"white"}}>
@@ -361,7 +372,7 @@ export default function Home() {
                 </p>
                 <a href="https://ettrenv5nd46gqbz5a9e.app.clientclub.net/login" target="_blank" rel="noreferrer"
                   style={{display:"inline-block",background:"#f89b24",color:"white",padding:"1rem 2.5rem",borderRadius:8,fontWeight:700,fontSize:"1.05rem",textDecoration:"none"}}>
-                  Open Training Videos ?
+                  {"Open Training Videos \u2192"}
                 </a>
                 <div style={{fontSize:"0.82rem",color:"#9ca3af",marginTop:"0.75rem"}}>Sign in with your GHL membership account</div>
               </div>
@@ -382,14 +393,13 @@ export default function Home() {
                   </div>
                   <div style={{fontWeight:800,color:"#1a2f6e",fontSize:"1rem",marginBottom:"0.3rem"}}>{item.label}</div>
                   <div style={{fontSize:"0.85rem",color:"#6b7280",lineHeight:1.5,marginBottom:"0.5rem"}}>{item.desc}</div>
-                  <div style={{color:"#f89b24",fontSize:"0.82rem",fontWeight:700}}>Watch Now ?</div>
+                  <div style={{color:"#f89b24",fontSize:"0.82rem",fontWeight:700}}>{"Watch Now \u2192"}</div>
                 </a>
               ))}
             </div>
           </div>
         )}
 
-        {/* -- CALENDAR -- */}
         {activeTab === "calendar" && (
           <div style={{maxWidth:900,margin:"0 auto"}}>
             <div style={{marginBottom:"1.25rem"}}>
@@ -416,7 +426,7 @@ export default function Home() {
                         <div style={{fontSize:"0.85rem",color:"#6b7280",marginBottom:"0.5rem"}}>{event.posts?.excerpt}</div>
                         <div style={{display:"flex",gap:"1rem",flexWrap:"wrap",fontSize:"0.82rem",color:"#9ca3af",fontWeight:600}}>
                           <span>{d.toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit"})}</span>
-                          {event.is_virtual ? <span>Virtual Event</span> : event.location && <span>?? {event.location}</span>}
+                          {event.is_virtual ? <span>Virtual Event</span> : event.location && <span>{event.location}</span>}
                         </div>
                       </div>
                       {event.is_virtual && event.virtual_link && (
@@ -435,7 +445,6 @@ export default function Home() {
           </div>
         )}
 
-        {/* -- RESOURCES -- */}
         {activeTab === "resources" && (
           <div style={{maxWidth:900,margin:"0 auto"}}>
             <div style={{marginBottom:"1.25rem"}}>
@@ -447,24 +456,24 @@ export default function Home() {
                 style={{background:"linear-gradient(135deg,#1a2f6e 0%,#2a4a9e 100%)",borderRadius:14,padding:"1.5rem",color:"white",textDecoration:"none",display:"block"}}>
                 <div style={{fontWeight:800,fontSize:"1.1rem",marginBottom:"0.3rem"}}>Academy Website</div>
                 <div style={{opacity:0.8,fontSize:"0.85rem"}}>windmarsolaracademy.com</div>
-                <div style={{color:"#f89b24",fontWeight:700,marginTop:"0.75rem",fontSize:"0.85rem"}}>Visit Site ?</div>
+                <div style={{color:"#f89b24",fontWeight:700,marginTop:"0.75rem",fontSize:"0.85rem"}}>{"Visit Site \u2192"}</div>
               </a>
               <a href="https://ettrenv5nd46gqbz5a9e.app.clientclub.net/login" target="_blank" rel="noreferrer"
                 style={{background:"linear-gradient(135deg,#f89b24 0%,#d4811a 100%)",borderRadius:14,padding:"1.5rem",color:"white",textDecoration:"none",display:"block"}}>
                 <div style={{fontWeight:800,fontSize:"1.1rem",marginBottom:"0.3rem"}}>Training Portal</div>
                 <div style={{opacity:0.8,fontSize:"0.85rem"}}>GHL Membership Courses</div>
-                <div style={{color:"white",fontWeight:700,marginTop:"0.75rem",fontSize:"0.85rem",opacity:0.9}}>Open Portal ?</div>
+                <div style={{color:"white",fontWeight:700,marginTop:"0.75rem",fontSize:"0.85rem",opacity:0.9}}>{"Open Portal \u2192"}</div>
               </a>
             </div>
             <h2 style={{color:"#1a2f6e",fontSize:"1rem",fontWeight:800,textTransform:"uppercase",letterSpacing:"0.04em",marginBottom:"1rem"}}>Documents</h2>
             <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(260px,1fr))",gap:"0.75rem"}}>
               {[
-                {icon:"??",label:"Install Process Guide",meta:"PDF � Operations"},
-                {icon:"??",label:"Commission Structure",meta:"PDF � Sales Team"},
-                {icon:"??",label:"Customer Proposal Template",meta:"PowerPoint � Sales"},
-                {icon:"??",label:"Compliance Checklist",meta:"PDF � Legal � 2025"},
-                {icon:"??",label:"Territory Map � Puerto Rico",meta:"PDF � Operations"},
-                {icon:"??",label:"Product Catalog 2025",meta:"PDF � Marketing"},
+                {icon:"\uD83D\uDCD8",label:"Install Process Guide",meta:"PDF - Operations"},
+                {icon:"\uD83D\uDCB0",label:"Commission Structure",meta:"PDF - Sales Team"},
+                {icon:"\uD83D\uDCCA",label:"Customer Proposal Template",meta:"PowerPoint - Sales"},
+                {icon:"\u2705",label:"Compliance Checklist",meta:"PDF - Legal - 2025"},
+                {icon:"\uD83D\uDDFA",label:"Territory Map - Puerto Rico",meta:"PDF - Operations"},
+                {icon:"\uD83D\uDCE6",label:"Product Catalog 2025",meta:"PDF - Marketing"},
               ].map((doc,i) => (
                 <div key={i} className="resource-card" onClick={() => showToast("Document coming soon!")}>
                   <div className="resource-icon" style={{background:"#f3f4f6"}}>{doc.icon}</div>
@@ -472,7 +481,7 @@ export default function Home() {
                     <div className="resource-title">{doc.label}</div>
                     <div className="resource-meta">{doc.meta}</div>
                   </div>
-                  <span style={{color:"#9ca3af"}}>?</span>
+                  <span style={{color:"#9ca3af"}}>{"\u203A"}</span>
                 </div>
               ))}
             </div>
@@ -482,16 +491,10 @@ export default function Home() {
       </main>
 
       <nav className="mobile-nav bottom-nav">
-        {[
-          {id:"home",label:"Home",d:"M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z M9 22V12h6v10"},
-          {id:"feed",label:"Feed",d:"M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"},
-          {id:"spiffs",label:"Spiffs",d:"M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"},
-          {id:"videos",label:"Videos",d:"M23 7l-7 5 7 5V7z M1 5h15a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H1z"},
-          {id:"resources",label:"Docs",d:"M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"},
-        ].map(tab => (
+        {navTabs.map(tab => (
           <button key={tab.id} className={"nav-item " + (activeTab===tab.id?"active":"")} onClick={() => setActiveTab(tab.id)}>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              {tab.d.split("M").filter(Boolean).map((d,i) => <path key={i} d={"M"+d} />)}
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              {tab.d.split(/(?=M)/).filter(Boolean).map((seg,i) => <path key={i} d={seg.trim()} />)}
             </svg>
             <span className="nav-label">{tab.label}</span>
           </button>
@@ -504,5 +507,3 @@ export default function Home() {
     </div>
   )
 }
-
-

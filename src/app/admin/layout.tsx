@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 import { useEffect, useState } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { useRouter, usePathname } from "next/navigation"
@@ -65,7 +65,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           </div>
         </div>
       </div>
-
       <nav style={{flex:1,padding:"0.75rem 0",overflowY:"auto"}}>
         {navItems.map(item => (
           <Link key={item.href} href={item.href}
@@ -76,7 +75,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           </Link>
         ))}
       </nav>
-
       <div style={{padding:"1rem",borderTop:"1px solid rgba(255,255,255,0.08)"}}>
         <div style={{color:"rgba(255,255,255,0.4)",fontSize:"0.75rem",fontWeight:600,marginBottom:"0.5rem",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
           {user?.email}
@@ -95,12 +93,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   return (
     <div style={{minHeight:"100vh",display:"flex",flexDirection:"column",fontFamily:"Barlow,system-ui,sans-serif",background:"#f9fafb"}}>
-
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0.75rem 1rem",background:"#0f1d47",borderBottom:"1px solid rgba(255,255,255,0.08)",position:"sticky",top:0,zIndex:200}}>
         <div style={{display:"flex",alignItems:"center",gap:"0.75rem"}}>
-          <button onClick={() => setSidebarOpen(!sidebarOpen)} style={{background:"rgba(255,255,255,0.1)",border:"none",borderRadius:8,width:36,height:36,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:"white"}}>
+          <button className="admin-hamburger" onClick={() => setSidebarOpen(!sidebarOpen)} style={{background:"rgba(255,255,255,0.1)",border:"none",borderRadius:8,width:36,height:36,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:"white"}}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
+              {sidebarOpen ? (<><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></>) : (<><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></>)}
             </svg>
           </button>
           <div>
@@ -118,31 +115,31 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           </button>
         </div>
       </div>
-
       <div style={{display:"flex",flex:1,position:"relative"}}>
-
         {sidebarOpen && (
-          <div onClick={() => setSidebarOpen(false)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:150}} />
+          <div className="admin-overlay" onClick={() => setSidebarOpen(false)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:150}} />
         )}
-
-        <div style={{position:"fixed",top:0,left:0,height:"100vh",zIndex:160,transform:sidebarOpen?"translateX(0)":"translateX(-100%)",transition:"transform 0.25s ease",paddingTop:52}}>
+        <div className="admin-mobile-sidebar" style={{position:"fixed",top:52,left:0,height:"calc(100vh - 52px)",zIndex:160,transform:sidebarOpen?"translateX(0)":"translateX(-100%)",transition:"transform 0.25s ease"}}>
           <Sidebar />
         </div>
-
-        <div style={{display:"none"}} className="desktop-sidebar">
+        <div className="admin-desktop-sidebar">
           <Sidebar />
         </div>
-
         <main style={{flex:1,padding:"1.5rem",maxWidth:"100%",overflowX:"hidden"}}>
           {children}
         </main>
       </div>
-
-      <style>{
-        `@media (min-width: 768px) {
-          .desktop-sidebar { display: flex !important; position: sticky; top: 52px; height: calc(100vh - 52px); flex-shrink: 0; }
-        }`
-      }</style>
+      <style>{`
+        .admin-desktop-sidebar { display: none; }
+        .admin-hamburger { display: flex; }
+        .admin-mobile-sidebar { display: block; }
+        @media (min-width: 768px) {
+          .admin-desktop-sidebar { display: flex; position: sticky; top: 52px; height: calc(100vh - 52px); flex-shrink: 0; }
+          .admin-hamburger { display: none !important; }
+          .admin-mobile-sidebar { display: none !important; }
+          .admin-overlay { display: none !important; }
+        }
+      `}</style>
     </div>
   )
 }
