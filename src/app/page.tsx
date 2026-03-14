@@ -316,6 +316,15 @@ export default function Home() {
             </svg>
             Academy Website
           </a>
+          <a href="/d2d"
+            style={{display:"flex",alignItems:"center",gap:"0.75rem",padding:"0.9rem 1.25rem",width:"100%",
+              background:"transparent",color:"rgba(255,255,255,0.6)",textDecoration:"none",fontSize:"0.95rem",fontWeight:700,
+              borderRight:"3px solid transparent"}}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="2">
+              <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>
+            </svg>
+            D2D Canvassing
+          </a>
           <div style={{height:1,background:"rgba(255,255,255,0.08)",margin:"0.75rem 1.25rem"}} />
           <a href="/login"
             style={{display:"flex",alignItems:"center",gap:"0.75rem",padding:"0.9rem 1.25rem",width:"100%",
@@ -716,6 +725,7 @@ export default function Home() {
     </div>
   )
 }
+
 
 
 
