@@ -43,12 +43,16 @@ const ASSETS = {
   panel4: "https://assets.cdn.filesafe.space/eTTRenV5nD46gQbZ5A9E/media/6504716e51a217d93d76dde1.png",
 }
 
-const navTabs = [
+const bottomTabs = [
   {id:"home", label:"Home", d:"M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z M9 22V12h6v10"},
   {id:"feed", label:"Feed", d:"M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"},
   {id:"spiffs", label:"Spiffs", d:"M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"},
   {id:"videos", label:"Videos", d:"M23 7l-7 5 7 5V7z M1 5h15a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H1z"},
   {id:"calendar", label:"Events", d:"M3 4h18a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z M16 2v4M8 2v4M1 10h22"},
+]
+
+const desktopTabs = [
+  ...bottomTabs,
   {id:"resources", label:"Docs", d:"M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"},
 ]
 
@@ -61,7 +65,7 @@ export default function Home() {
   const [loading, setLoading] = useState(true)
   const [likedPosts, setLikedPosts] = useState<Set<string>>(new Set())
   const [toast, setToast] = useState("")
-  const [showMenu, setShowMenu] = useState(false)
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const supabase = createClient()
 
   useEffect(() => { fetchData() }, [])
@@ -162,9 +166,13 @@ export default function Home() {
         .desktop-nav-btn:hover { background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.9); }
         .desktop-nav-btn.active { background: rgba(248,155,36,0.15); color: #f89b24; }
         .desktop-nav-btn svg { width: 18px; height: 18px; flex-shrink: 0; }
+        .mobile-menu-overlay { display: block; }
+        .mobile-menu-panel { display: block; }
         @media (min-width: 768px) {
           .desktop-nav { display: flex; }
           .mobile-nav { display: none !important; }
+          .mobile-menu-overlay { display: none !important; }
+          .mobile-menu-panel { display: none !important; }
           .app-shell { max-width: 100% !important; }
           .app-content { padding-bottom: 0 !important; }
           .desktop-sidebar { display: flex; }
@@ -179,12 +187,69 @@ export default function Home() {
         }
       `}</style>
 
+      {mobileMenuOpen && (
+        <div className="mobile-menu-overlay" onClick={() => setMobileMenuOpen(false)}
+          style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:300}} />
+      )}
+      <div className="mobile-menu-panel"
+        style={{position:"fixed",top:0,right:0,width:280,height:"100vh",background:"#0f1d47",zIndex:310,
+          transform:mobileMenuOpen?"translateX(0)":"translateX(100%)",transition:"transform 0.3s ease",
+          display:"flex",flexDirection:"column",boxShadow:"-4px 0 24px rgba(0,0,0,0.3)"}}>
+        <div style={{padding:"1.25rem",borderBottom:"1px solid rgba(255,255,255,0.08)",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+          <div>
+            <span style={{color:"#f89b24",fontWeight:800,fontSize:"1.05rem"}}>SOLAR</span>
+            <span style={{color:"white",fontWeight:800,fontSize:"1.05rem"}}> ACADEMY</span>
+          </div>
+          <button onClick={() => setMobileMenuOpen(false)}
+            style={{background:"rgba(255,255,255,0.1)",border:"none",borderRadius:8,width:36,height:36,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:"white"}}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
+        </div>
+        <nav style={{flex:1,padding:"1rem 0"}}>
+          <button onClick={() => { setActiveTab("resources"); setMobileMenuOpen(false) }}
+            style={{display:"flex",alignItems:"center",gap:"0.75rem",padding:"0.9rem 1.25rem",width:"100%",
+              background:activeTab==="resources"?"rgba(248,155,36,0.15)":"transparent",
+              color:activeTab==="resources"?"white":"rgba(255,255,255,0.6)",
+              border:"none",cursor:"pointer",fontSize:"0.95rem",fontWeight:700,fontFamily:"Barlow,system-ui,sans-serif",
+              borderRight:activeTab==="resources"?"3px solid #f89b24":"3px solid transparent",transition:"all 0.15s"}}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={activeTab==="resources"?"#f89b24":"rgba(255,255,255,0.4)"} strokeWidth="2">
+              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+            </svg>
+            Resources & Docs
+          </button>
+          <a href="https://windmarsolaracademy.com" target="_blank" rel="noreferrer"
+            style={{display:"flex",alignItems:"center",gap:"0.75rem",padding:"0.9rem 1.25rem",width:"100%",
+              background:"transparent",color:"rgba(255,255,255,0.6)",textDecoration:"none",fontSize:"0.95rem",fontWeight:700,
+              borderRight:"3px solid transparent"}}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="2">
+              <circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+            </svg>
+            Academy Website
+          </a>
+          <div style={{height:1,background:"rgba(255,255,255,0.08)",margin:"0.75rem 1.25rem"}} />
+          <a href="/login"
+            style={{display:"flex",alignItems:"center",gap:"0.75rem",padding:"0.9rem 1.25rem",width:"100%",
+              background:"transparent",color:"rgba(255,255,255,0.6)",textDecoration:"none",fontSize:"0.95rem",fontWeight:700,
+              borderRight:"3px solid transparent"}}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="2">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+            </svg>
+            Admin Login
+          </a>
+        </nav>
+        <div style={{padding:"1.25rem",borderTop:"1px solid rgba(255,255,255,0.08)"}}>
+          <div style={{color:"rgba(255,255,255,0.3)",fontSize:"0.72rem",fontWeight:600,textAlign:"center"}}>Windmar Solar Academy</div>
+        </div>
+      </div>
+
       <header style={{background:"linear-gradient(135deg,#0f1d47 0%,#1a2f6e 100%)",position:"sticky",top:0,zIndex:100,boxShadow:"0 2px 16px rgba(0,0,0,0.25)"}}>
         <div style={{maxWidth:1400,margin:"0 auto",padding:"0 1.5rem",display:"flex",alignItems:"center",justifyContent:"space-between",height:64}}>
           <div style={{display:"flex",alignItems:"center",gap:"1.5rem"}}>
             <img src={ASSETS.logo} alt="Windmar Solar Academy" style={{height:40,width:"auto",objectFit:"contain",cursor:"pointer"}} onClick={() => setActiveTab("home")} onError={(e:any)=>{e.target.style.display="none"}} />
             <nav className="desktop-nav" style={{alignItems:"center",gap:"0.25rem"}}>
-              {navTabs.map(tab => (
+              {desktopTabs.map(tab => (
                 <button key={tab.id} className={"desktop-nav-btn" + (activeTab === tab.id ? " active" : "")} onClick={() => setActiveTab(tab.id)}>
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     {tab.d.split(/(?=M)/).filter(Boolean).map((seg,i) => <path key={i} d={seg.trim()} />)}
@@ -207,7 +272,7 @@ export default function Home() {
         </div>
       </header>
 
-      <main style={{maxWidth:1400,margin:"0 auto",padding:"1.5rem"}} onClick={() => setShowMenu(false)}>
+      <main style={{maxWidth:1400,margin:"0 auto",padding:"1.5rem"}}>
 
         {activeTab === "home" && (
           <div>
@@ -491,7 +556,7 @@ export default function Home() {
       </main>
 
       <nav className="mobile-nav bottom-nav">
-        {navTabs.map(tab => (
+        {bottomTabs.map(tab => (
           <button key={tab.id} className={"nav-item " + (activeTab===tab.id?"active":"")} onClick={() => setActiveTab(tab.id)}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               {tab.d.split(/(?=M)/).filter(Boolean).map((seg,i) => <path key={i} d={seg.trim()} />)}
@@ -499,6 +564,12 @@ export default function Home() {
             <span className="nav-label">{tab.label}</span>
           </button>
         ))}
+        <button className="nav-item" onClick={() => setMobileMenuOpen(true)}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
+          </svg>
+          <span className="nav-label">Menu</span>
+        </button>
       </nav>
 
       {toast && (
