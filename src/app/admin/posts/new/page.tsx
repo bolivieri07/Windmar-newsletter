@@ -110,6 +110,45 @@ export default function NewPostPage() {
     return text.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "")
   }
 
+  const [notifying, setNotifying] = useState(false)
+  const [notifResult, setNotifResult] = useState<any>(null)
+
+  async function sendNotification(title: string, excerpt: string) {
+    setNotifying(true)
+    try {
+      const smsMessage = "Windmar Solar Academy: " + title + (excerpt ? " - " + excerpt : "") + "\n\nView: https://windmar-newsletter.vercel.app"
+      const emailBody = `
+        <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
+          <div style="background:linear-gradient(135deg,#0f1d47,#1a2f6e);padding:24px;border-radius:12px 12px 0 0">
+            <h1 style="color:#f89b24;margin:0;font-size:20px">Windmar Solar Academy</h1>
+          </div>
+          <div style="background:white;padding:24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 12px 12px">
+            <h2 style="color:#1a2f6e;margin:0 0 12px">${title}</h2>
+            <p style="color:#4b5563;line-height:1.6;margin:0 0 20px">${excerpt}</p>
+            <a href="https://windmar-newsletter.vercel.app" style="display:inline-block;background:#f89b24;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:bold">View Now</a>
+          </div>
+        </div>`
+      const res = await fetch("/api/ghl", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: "announcement",
+          title,
+          message: smsMessage,
+          emailSubject: "New Update: " + title,
+          emailBody,
+        }),
+      })
+      const data = await res.json()
+      setNotifResult(data)
+      if (data.error) { showToast("Notification error: " + data.error) }
+      else { showToast("Notifications sent to " + (data.results?.total || 0) + " contacts!") }
+    } catch (err: any) {
+      showToast("Notification failed: " + err.message)
+    }
+    setNotifying(false)
+  }
+
   async function handleSave(publishNow = false) {
     if (!form.title.trim()) { showToast("Title is required"); return }
     setSaving(true)
@@ -138,9 +177,12 @@ export default function NewPostPage() {
       const { error } = await supabase.from("posts").insert(payload)
       if (error) { showToast("Error: " + error.message); setSaving(false); return }
       showToast(publishNow ? "Post published!" : "Draft saved!")
+      if (publishNow) {
+        await sendNotification(form.title, form.excerpt)
+      }
     }
     setSaving(false)
-    setTimeout(() => router.push("/admin/posts"), 1200)
+    setTimeout(() => router.push("/admin/posts"), 1500)
   }
 
   const inputStyle = {
@@ -375,3 +417,4 @@ export default function NewPostPage() {
     </div>
   )
 }
+

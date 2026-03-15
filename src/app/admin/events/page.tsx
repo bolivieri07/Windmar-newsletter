@@ -8,6 +8,39 @@ export default function EventsPage() {
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [toast, setToast] = useState("")
+  const [showNotifyConfirm, setShowNotifyConfirm] = useState(false)
+  const [pendingNotify, setPendingNotify] = useState<{title:string,excerpt:string}|null>(null)
+  const [notifying, setNotifying] = useState(false)
+
+  async function sendEventNotification(title: string, excerpt: string) {
+    setNotifying(true)
+    try {
+      const smsMessage = "Windmar Solar Academy Event: " + title + (excerpt ? " - " + excerpt : "") + "\n\nDetails: https://windmar-newsletter.vercel.app"
+      const emailBody = `
+        <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
+          <div style="background:linear-gradient(135deg,#0f1d47,#1a2f6e);padding:24px;border-radius:12px 12px 0 0">
+            <h1 style="color:#f89b24;margin:0;font-size:20px">Windmar Solar Academy</h1>
+            <p style="color:rgba(255,255,255,0.7);margin:8px 0 0;font-size:14px">New Event</p>
+          </div>
+          <div style="background:white;padding:24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 12px 12px">
+            <h2 style="color:#1a2f6e;margin:0 0 12px">${title}</h2>
+            <p style="color:#4b5563;line-height:1.6;margin:0 0 20px">${excerpt}</p>
+            <a href="https://windmar-newsletter.vercel.app" style="display:inline-block;background:#f89b24;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:bold">View Event</a>
+          </div>
+        </div>`
+      const res = await fetch("/api/ghl", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type:"event", title, message:smsMessage, emailSubject:"New Event: "+title, emailBody }),
+      })
+      const data = await res.json()
+      if (data.error) showToast("Notification error: " + data.error)
+      else showToast("Notifications sent to " + (data.results?.total || 0) + " contacts!")
+    } catch (err: any) { showToast("Notification failed: " + err.message) }
+    setNotifying(false)
+    setShowNotifyConfirm(false)
+    setPendingNotify(null)
+  }
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState({
     post_title: "",
@@ -93,6 +126,8 @@ export default function EventsPage() {
       })
     if (eventError) { showToast("Error: " + eventError.message); setSaving(false); return }
     showToast("Event created and published!")
+    setPendingNotify({ title: form.post_title, excerpt: form.post_excerpt })
+    setShowNotifyConfirm(true)
     setShowForm(false)
     setForm({ post_title:"",post_excerpt:"",cover_image_url:"",event_date:"",event_end_date:"",location:"",address:"",is_virtual:false,virtual_link:"",max_attendees:"",is_rsvp_open:true })
     fetchEvents()
@@ -322,6 +357,26 @@ export default function EventsPage() {
         </div>
       )}
 
+      {showNotifyConfirm && pendingNotify && (
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center",padding:"1rem"}}>
+          <div style={{background:"white",borderRadius:16,padding:"2rem",maxWidth:420,width:"100%",boxShadow:"0 16px 64px rgba(0,0,0,0.2)"}}>
+            <h2 style={{color:"#1a2f6e",fontSize:"1.15rem",fontWeight:800,margin:"0 0 0.5rem 0"}}>Send Notifications?</h2>
+            <p style={{color:"#6b7280",fontSize:"0.88rem",margin:"0 0 0.5rem 0"}}>Event: <strong>{pendingNotify.title}</strong></p>
+            <p style={{color:"#9ca3af",fontSize:"0.82rem",margin:"0 0 1.25rem 0"}}>This will send an SMS and email to all contacts tagged &quot;solar academy member&quot; in GHL.</p>
+            <div style={{display:"flex",gap:"0.75rem"}}>
+              <button onClick={() => sendEventNotification(pendingNotify.title, pendingNotify.excerpt)} disabled={notifying}
+                style={{flex:1,padding:"0.8rem",background:"#f89b24",color:"white",border:"none",borderRadius:8,fontWeight:700,cursor:notifying?"not-allowed":"pointer",opacity:notifying?0.7:1,fontFamily:"Barlow,system-ui,sans-serif"}}>
+                {notifying ? "Sending..." : "Yes, Notify Everyone"}
+              </button>
+              <button onClick={() => { setShowNotifyConfirm(false); setPendingNotify(null) }}
+                style={{padding:"0.8rem 1.25rem",background:"white",color:"#6b7280",border:"1.5px solid #e5e7eb",borderRadius:8,fontWeight:700,cursor:"pointer",fontFamily:"Barlow,system-ui,sans-serif"}}>
+                Skip
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {toast && (
         <div style={{position:"fixed",bottom:24,left:"50%",transform:"translateX(-50%)",background:"#1a2f6e",color:"white",padding:"0.75rem 1.5rem",borderRadius:30,fontSize:"0.88rem",fontWeight:600,boxShadow:"0 8px 32px rgba(0,0,0,0.2)",zIndex:999,whiteSpace:"nowrap"}}>
           {toast}
@@ -330,3 +385,6 @@ export default function EventsPage() {
     </div>
   )
 }
+
+
+
