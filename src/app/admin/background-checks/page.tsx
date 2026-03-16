@@ -1,11 +1,11 @@
 ﻿'use client'
-import { useEffect, useState, useCallback, useMemo } from "react"
+import { useEffect, useState, useCallback } from "react"
 import { createClient } from "@/lib/supabase/client"
 
 const BG_CHECK_DOC_NAME = "Windmar- Home Depot Background Check"
 const LOCATION_ID = "eTTRenV5nD46gQbZ5A9E"
 const PAGE_SIZE = 20
-const INITIAL_PAGES = 3
+const CUTOFF_DATE = "2025-01-01T00:00:00.000Z"
 
 const SELFIE_FIELD_ID = "IvtzPRyBRw6fUpvsLQZ0"
 const ID_FIELD_ID = "WpmuIT4Pdot4M644rxtt"
@@ -17,6 +17,7 @@ type GHLDocument = {
   status: string
   createdAt: string
   updatedAt: string
+  links?: { url: string; title?: string; type?: string }[]
   recipients: {
     id: string
     firstName: string
@@ -41,8 +42,16 @@ type LocalRecord = {
   notes: string | null
 }
 
-type FileInfo = { url: string; name: string }
-type ContactFiles = { selfie?: FileInfo; id?: FileInfo; ssn?: FileInfo }
+type FileInfo = {
+  url: string
+  name: string
+}
+
+type ContactFiles = {
+  selfie?: FileInfo
+  id?: FileInfo
+  ssn?: FileInfo
+}
 
 type MergedRecord = {
   documentId: string
@@ -60,116 +69,92 @@ type MergedRecord = {
   localId: string | null
   files: ContactFiles | null
   loadingFiles: boolean
+  links: { url: string; title?: string; type?: string }[]
 }
 
 export default function BackgroundChecksPage() {
   const [records, setRecords] = useState<MergedRecord[]>([])
   const [loading, setLoading] = useState(true)
-  const [loadingMore, setLoadingMore] = useState(false)
   const [loadingProgress, setLoadingProgress] = useState("")
   const [filter, setFilter] = useState("all")
   const [search, setSearch] = useState("")
   const [toast, setToast] = useState("")
-  const [currentSkip, setCurrentSkip] = useState(0)
-  const [hasMore, setHasMore] = useState(true)
+  const [copiedId, setCopiedId] = useState<string | null>(null)
+  const [resendingId, setResendingId] = useState<string | null>(null)
   const supabase = createClient()
 
   function showToast(msg: string) { setToast(msg); setTimeout(() => setToast(""), 3000) }
 
-  const fetchPages = useCallback(async (startSkip: number, numPages: number): Promise<{ docs: GHLDocument[]; nextSkip: number; moreAvailable: boolean }> => {
-    const bgDocs: GHLDocument[] = []
-    let skip = startSkip
-    let moreAvailable = true
-
-    for (let i = 0; i < numPages; i++) {
-      const res = await fetch(`/api/ghl/test?endpoint=/proposals/document?locationId=${LOCATION_ID}%26limit=${PAGE_SIZE}%26skip=${skip}`)
-      const data = await res.json()
-      const docs = data.documents || []
-
-      if (docs.length === 0) { moreAvailable = false; break }
-
-      for (const doc of docs) {
-        if (doc.name === BG_CHECK_DOC_NAME && doc.status !== "draft") {
-          bgDocs.push(doc)
-        }
-      }
-
-      skip += PAGE_SIZE
-      if (docs.length < PAGE_SIZE) { moreAvailable = false; break }
-    }
-
-    return { docs: bgDocs, nextSkip: skip, moreAvailable }
-  }, [])
-
-  const mergeWithLocal = useCallback(async (docs: GHLDocument[]): Promise<MergedRecord[]> => {
-    const { data: localRecords } = await supabase.from("background_checks").select("*")
-    const localMap = new Map<string, LocalRecord>()
-    if (localRecords) {
-      localRecords.forEach((r: LocalRecord) => { localMap.set(r.ghl_document_id, r) })
-    }
-
-    return docs.map(doc => {
-      const recipient = doc.recipients[0]
-      const local = localMap.get(doc.documentId)
-      return {
-        documentId: doc.documentId,
-        contactId: recipient?.id || "",
-        repName: recipient?.contactName || "Unknown",
-        repEmail: recipient?.email || "",
-        docStatus: doc.status,
-        createdAt: doc.createdAt,
-        updatedAt: doc.updatedAt,
-        signedDate: recipient?.signedDate || null,
-        hrStatus: local?.hr_status || "pending",
-        approvedAt: local?.approved_at || null,
-        shirtGivenAt: local?.shirt_given_at || null,
-        badgePrintedAt: local?.badge_printed_at || null,
-        localId: local?.id || null,
-        files: null,
-        loadingFiles: false,
-      }
-    }).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-  }, [supabase])
-
-  const loadInitial = useCallback(async () => {
+  const loadData = useCallback(async () => {
     setLoading(true)
-    setLoadingProgress("Fetching recent background checks...")
     try {
-      const { docs, nextSkip, moreAvailable } = await fetchPages(0, INITIAL_PAGES)
-      const merged = await mergeWithLocal(docs)
+      let allBgDocs: GHLDocument[] = []
+      let skip = 0
+      let keepGoing = true
+
+      while (keepGoing) {
+        setLoadingProgress(`Fetching documents... (${allBgDocs.length} found, page ${Math.floor(skip / PAGE_SIZE) + 1})`)
+        const res = await fetch(`/api/ghl/test?endpoint=/proposals/document?locationId=${LOCATION_ID}%26limit=${PAGE_SIZE}%26skip=${skip}`)
+        const data = await res.json()
+        const docs = data.documents || []
+
+        if (docs.length === 0) { keepGoing = false; break }
+
+        for (const doc of docs) {
+          if (doc.name === BG_CHECK_DOC_NAME && doc.status !== "draft") {
+            allBgDocs.push(doc)
+          }
+          if (new Date(doc.createdAt) < new Date(CUTOFF_DATE)) {
+            keepGoing = false
+            break
+          }
+        }
+
+        skip += PAGE_SIZE
+        if (skip > 6000) keepGoing = false
+      }
+
+      setLoadingProgress(`Found ${allBgDocs.length} background checks. Loading local data...`)
+
+      const { data: localRecords } = await supabase.from("background_checks").select("*")
+      const localMap = new Map<string, LocalRecord>()
+      if (localRecords) {
+        localRecords.forEach((r: LocalRecord) => { localMap.set(r.ghl_document_id, r) })
+      }
+
+      const merged: MergedRecord[] = allBgDocs.map(doc => {
+        const recipient = doc.recipients[0]
+        const local = localMap.get(doc.documentId)
+        return {
+          documentId: doc.documentId,
+          contactId: recipient?.id || "",
+          repName: recipient?.contactName || "Unknown",
+          repEmail: recipient?.email || "",
+          docStatus: doc.status,
+          createdAt: doc.createdAt,
+          updatedAt: doc.updatedAt,
+          signedDate: recipient?.signedDate || null,
+          hrStatus: local?.hr_status || "pending",
+          approvedAt: local?.approved_at || null,
+          shirtGivenAt: local?.shirt_given_at || null,
+          badgePrintedAt: local?.badge_printed_at || null,
+          localId: local?.id || null,
+          files: null,
+          loadingFiles: false,
+          links: doc.links || [],
+        }
+      })
+
+      merged.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
       setRecords(merged)
-      setCurrentSkip(nextSkip)
-      setHasMore(moreAvailable)
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Unknown error"
-      showToast("Error: " + msg)
+      showToast("Error loading data: " + msg)
     }
     setLoading(false)
-  }, [fetchPages, mergeWithLocal])
+  }, [supabase])
 
-  const loadMore = useCallback(async () => {
-    setLoadingMore(true)
-    try {
-      const { docs, nextSkip, moreAvailable } = await fetchPages(currentSkip, 3)
-      if (docs.length > 0) {
-        const merged = await mergeWithLocal([...docs])
-        setRecords(prev => {
-          const existingIds = new Set(prev.map(r => r.documentId))
-          const newOnes = merged.filter(r => !existingIds.has(r.documentId))
-          return [...prev, ...newOnes].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-        })
-      }
-      setCurrentSkip(nextSkip)
-      setHasMore(moreAvailable)
-      if (docs.length === 0) showToast("No more records found")
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Unknown error"
-      showToast("Error: " + msg)
-    }
-    setLoadingMore(false)
-  }, [currentSkip, fetchPages, mergeWithLocal])
-
-  useEffect(() => { loadInitial() }, [loadInitial])
+  useEffect(() => { loadData() }, [loadData])
 
   async function ensureLocalRecord(rec: MergedRecord): Promise<string> {
     if (rec.localId) return rec.localId
@@ -192,7 +177,7 @@ export default function BackgroundChecksPage() {
     if (status === "approved") { updates.approved_at = new Date().toISOString(); updates.approved_by = "Admin" }
     await supabase.from("background_checks").update(updates).eq("id", localId)
     showToast(rec.repName + " marked as " + status)
-    loadInitial()
+    loadData()
   }
 
   async function updateFulfillment(rec: MergedRecord, field: string) {
@@ -206,7 +191,7 @@ export default function BackgroundChecksPage() {
     if (field === "shirt" && rec.badgePrintedAt) updates.fulfillment_status = "complete"
     await supabase.from("background_checks").update(updates).eq("id", localId)
     showToast("Updated " + rec.repName)
-    loadInitial()
+    loadData()
   }
 
   function extractFileFromCustomField(customFields: Record<string, unknown>[], fieldId: string): FileInfo | undefined {
@@ -215,7 +200,8 @@ export default function BackgroundChecksPage() {
     const val = field.value as Record<string, Record<string, unknown>>
     const keys = Object.keys(val)
     if (keys.length === 0) return undefined
-    const entry = val[keys[0]] as { url?: string; meta?: { originalname?: string } }
+    const firstKey = keys[0]
+    const entry = val[firstKey] as { url?: string; meta?: { originalname?: string } }
     if (!entry?.url) return undefined
     return { url: entry.url, name: entry.meta?.originalname || "file" }
   }
@@ -228,15 +214,74 @@ export default function BackgroundChecksPage() {
       const data = await res.json()
       const contact = data.contact
       if (!contact?.customFields) throw new Error("No custom fields")
+
       const files: ContactFiles = {
         selfie: extractFileFromCustomField(contact.customFields, SELFIE_FIELD_ID),
         id: extractFileFromCustomField(contact.customFields, ID_FIELD_ID),
         ssn: extractFileFromCustomField(contact.customFields, SSN_FIELD_ID),
       }
+
       setRecords(prev => prev.map(r => r.documentId === rec.documentId ? { ...r, files, loadingFiles: false } : r))
     } catch {
       setRecords(prev => prev.map(r => r.documentId === rec.documentId ? { ...r, files: {}, loadingFiles: false } : r))
       showToast("Could not load files for " + rec.repName)
+    }
+  }
+
+  // === NEW FEATURE 1: Download signed GHL document ===
+  function handleDownloadDoc(rec: MergedRecord) {
+    if (rec.links && rec.links.length > 0) {
+      const signed = rec.links.find(l => l.type === "signed" || l.type === "completed" || l.type === "pdf" || (l.url && l.url.includes("pdf")))
+      const url = signed?.url || rec.links[0]?.url
+      if (url) {
+        window.open(url, "_blank", "noopener,noreferrer")
+        showToast("Opening signed document...")
+        return
+      }
+    }
+    showToast("No signed document link available for " + rec.repName)
+  }
+
+  // === NEW FEATURE 2: Resend contract ===
+  async function handleResendContract(rec: MergedRecord) {
+    if (!confirm("Resend background check contract to " + (rec.repName || rec.repEmail) + "?")) return
+    setResendingId(rec.documentId)
+    try {
+      const res = await fetch(`/api/ghl/test?endpoint=/proposals/document/send`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ documentId: rec.documentId, locationId: LOCATION_ID }),
+      })
+      const data = await res.json()
+      if (res.ok) {
+        showToast("Contract resent to " + rec.repName + "!")
+      } else {
+        showToast("Resend failed: " + (data.message || data.error || "Unknown error"))
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Unknown error"
+      showToast("Resend failed: " + msg)
+    }
+    setResendingId(null)
+  }
+
+  // === NEW FEATURE 3: Copy signing link ===
+  async function handleCopyLink(rec: MergedRecord) {
+    let link = ""
+    if (rec.links && rec.links.length > 0) {
+      const share = rec.links.find(l => l.type === "share" || l.type === "signing" || l.type === "view" || (l.url && (l.url.includes("proposal") || l.url.includes("sign"))))
+      link = share?.url || rec.links[0]?.url || ""
+    }
+    if (!link) {
+      link = "https://app.gohighlevel.com/proposals/document/view/" + rec.documentId
+    }
+    try {
+      await navigator.clipboard.writeText(link)
+      setCopiedId(rec.documentId)
+      showToast("Link copied!")
+      setTimeout(() => setCopiedId(null), 2500)
+    } catch {
+      showToast("Failed to copy link")
     }
   }
 
@@ -251,31 +296,32 @@ export default function BackgroundChecksPage() {
     denied: { bg: "#fef2f2", color: "#dc2626" },
   }
 
-  const filtered = useMemo(() => {
-    let list = filter === "all" ? records :
-      filter === "sent" ? records.filter(r => r.docStatus === "sent" || r.docStatus === "viewed") :
-      filter === "completed" ? records.filter(r => r.docStatus === "completed" && r.hrStatus !== "approved") :
-      filter === "approved" ? records.filter(r => r.hrStatus === "approved" && !(r.shirtGivenAt && r.badgePrintedAt)) :
-      filter === "done" ? records.filter(r => !!(r.shirtGivenAt && r.badgePrintedAt)) :
-      records
-
-    if (search.trim()) {
-      const q = search.toLowerCase().trim()
-      list = list.filter(r =>
-        r.repName.toLowerCase().includes(q) ||
-        r.repEmail.toLowerCase().includes(q)
+  // === NEW FEATURE 4: Search filter ===
+  const searchLower = search.toLowerCase().trim()
+  const searchFiltered = searchLower
+    ? records.filter(r =>
+        r.repName.toLowerCase().includes(searchLower) ||
+        r.repEmail.toLowerCase().includes(searchLower) ||
+        r.docStatus.toLowerCase().includes(searchLower) ||
+        r.hrStatus.toLowerCase().includes(searchLower)
       )
-    }
-    return list
-  }, [records, filter, search])
+    : records
 
-  const stats = useMemo(() => ({
+  const filtered = filter === "all" ? searchFiltered :
+    filter === "sent" ? searchFiltered.filter(r => r.docStatus === "sent" || r.docStatus === "viewed") :
+    filter === "completed" ? searchFiltered.filter(r => r.docStatus === "completed" && r.hrStatus !== "approved") :
+    filter === "approved" ? searchFiltered.filter(r => r.hrStatus === "approved" && !(r.shirtGivenAt && r.badgePrintedAt)) :
+    filter === "done" ? searchFiltered.filter(r => !!(r.shirtGivenAt && r.badgePrintedAt)) :
+    searchFiltered
+
+  // Stats always from ALL records (not filtered by search)
+  const stats = {
     total: records.length,
     sent: records.filter(r => r.docStatus === "sent" || r.docStatus === "viewed").length,
     needsApproval: records.filter(r => r.docStatus === "completed" && r.hrStatus !== "approved").length,
     needsFulfillment: records.filter(r => r.hrStatus === "approved" && !(r.shirtGivenAt && r.badgePrintedAt)).length,
     done: records.filter(r => !!(r.shirtGivenAt && r.badgePrintedAt)).length,
-  }), [records])
+  }
 
   const fmt = (iso: string) => {
     try { return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) } catch { return "-" }
@@ -284,7 +330,7 @@ export default function BackgroundChecksPage() {
   if (loading) return (
     <div style={{ padding: 32, textAlign: "center", color: "#6b7280" }}>
       <div style={{ fontSize: 24, marginBottom: 8 }}>Loading background checks...</div>
-      <div style={{ fontSize: 14 }}>{loadingProgress}</div>
+      <div style={{ fontSize: 14 }}>{loadingProgress || "Connecting to GHL Documents API"}</div>
     </div>
   )
 
@@ -292,16 +338,9 @@ export default function BackgroundChecksPage() {
     <div style={{ padding: "16px 20px", maxWidth: 900, margin: "0 auto" }}>
       {toast && <div style={{ position: "fixed", top: 20, right: 20, background: "#1a2f6e", color: "white", padding: "12px 20px", borderRadius: 8, zIndex: 9999, fontSize: 14, boxShadow: "0 4px 12px rgba(0,0,0,.2)" }}>{toast}</div>}
 
-      <h1 style={{ fontSize: 22, fontWeight: 700, color: "#1a2f6e", margin: "0 0 12px" }}>HD Background Checks</h1>
+      <h1 style={{ fontSize: 22, fontWeight: 700, color: "#1a2f6e", margin: "0 0 16px" }}>HD Background Checks</h1>
 
-      <input
-        type="text"
-        placeholder="Search by name or email..."
-        value={search}
-        onChange={e => setSearch(e.target.value)}
-        style={{ width: "100%", padding: "10px 14px", borderRadius: 10, border: "2px solid #e5e7eb", fontSize: 14, marginBottom: 12, outline: "none" }}
-      />
-
+      {/* Stats buttons - always show total counts */}
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
         {[
           { label: "Total", value: stats.total, key: "all", color: "#1a2f6e" },
@@ -322,8 +361,33 @@ export default function BackgroundChecksPage() {
         ))}
       </div>
 
+      {/* Search bar */}
+      <div style={{ marginBottom: 16, position: "relative" }}>
+        <input
+          type="text"
+          placeholder="Search by name, email, or status..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          style={{
+            width: "100%", padding: "10px 14px", paddingRight: search ? 36 : 14,
+            border: "2px solid #e5e7eb", borderRadius: 10, fontSize: 14,
+            outline: "none", boxSizing: "border-box",
+          }}
+          onFocus={(e) => { e.currentTarget.style.borderColor = "#1a2f6e" }}
+          onBlur={(e) => { e.currentTarget.style.borderColor = "#e5e7eb" }}
+        />
+        {search && (
+          <button onClick={() => setSearch("")}
+            style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "#9ca3af", lineHeight: 1 }}>
+            {"\u00D7"}
+          </button>
+        )}
+      </div>
+
       {filtered.length === 0 ? (
-        <div style={{ textAlign: "center", color: "#9ca3af", padding: 40, fontSize: 15 }}>No records found</div>
+        <div style={{ textAlign: "center", color: "#9ca3af", padding: 40, fontSize: 15 }}>
+          {search ? `No results for "${search}"` : "No records in this category"}
+        </div>
       ) : filtered.map(rec => {
         const dc = docColor[rec.docStatus] || docColor.sent
         const hc = hrColor[rec.hrStatus] || hrColor.pending
@@ -352,6 +416,7 @@ export default function BackgroundChecksPage() {
             </div>
 
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+              {/* HR Approve/Deny */}
               {rec.docStatus === "completed" && rec.hrStatus === "pending" && (
                 <>
                   <button onClick={() => updateHRStatus(rec, "approved")}
@@ -365,23 +430,68 @@ export default function BackgroundChecksPage() {
                 </>
               )}
 
+              {/* Load Documents (contact files) */}
               {rec.docStatus === "completed" && !rec.files && !rec.loadingFiles && (
                 <button onClick={() => loadContactFiles(rec)}
                   style={{ padding: "6px 14px", borderRadius: 8, border: "2px solid #1a2f6e", background: "white", color: "#1a2f6e", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>
                   Load Documents
                 </button>
               )}
-              {rec.loadingFiles && <span style={{ fontSize: 13, color: "#6b7280" }}>Loading files...</span>}
+              {rec.loadingFiles && (
+                <span style={{ fontSize: 13, color: "#6b7280" }}>Loading files...</span>
+              )}
 
+              {/* Contact files (Selfie, ID, SSN) */}
               {rec.files && (
                 <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                  {rec.files.selfie && <a href={rec.files.selfie.url} target="_blank" rel="noopener noreferrer" style={{ padding: "6px 12px", borderRadius: 8, background: "#eff6ff", color: "#1d4ed8", fontSize: 12, fontWeight: 600, textDecoration: "none" }}>Selfie</a>}
-                  {rec.files.id && <a href={rec.files.id.url} target="_blank" rel="noopener noreferrer" style={{ padding: "6px 12px", borderRadius: 8, background: "#eff6ff", color: "#1d4ed8", fontSize: 12, fontWeight: 600, textDecoration: "none" }}>ID</a>}
-                  {rec.files.ssn && <a href={rec.files.ssn.url} target="_blank" rel="noopener noreferrer" style={{ padding: "6px 12px", borderRadius: 8, background: "#eff6ff", color: "#1d4ed8", fontSize: 12, fontWeight: 600, textDecoration: "none" }}>SSN Card</a>}
-                  {!rec.files.selfie && !rec.files.id && !rec.files.ssn && <span style={{ fontSize: 12, color: "#9ca3af" }}>No files uploaded</span>}
+                  {rec.files.selfie && (
+                    <a href={rec.files.selfie.url} target="_blank" rel="noopener noreferrer"
+                      style={{ padding: "6px 12px", borderRadius: 8, background: "#eff6ff", color: "#1d4ed8", fontSize: 12, fontWeight: 600, textDecoration: "none" }}>
+                      Selfie
+                    </a>
+                  )}
+                  {rec.files.id && (
+                    <a href={rec.files.id.url} target="_blank" rel="noopener noreferrer"
+                      style={{ padding: "6px 12px", borderRadius: 8, background: "#eff6ff", color: "#1d4ed8", fontSize: 12, fontWeight: 600, textDecoration: "none" }}>
+                      ID
+                    </a>
+                  )}
+                  {rec.files.ssn && (
+                    <a href={rec.files.ssn.url} target="_blank" rel="noopener noreferrer"
+                      style={{ padding: "6px 12px", borderRadius: 8, background: "#eff6ff", color: "#1d4ed8", fontSize: 12, fontWeight: 600, textDecoration: "none" }}>
+                      SSN Card
+                    </a>
+                  )}
+                  {!rec.files.selfie && !rec.files.id && !rec.files.ssn && (
+                    <span style={{ fontSize: 12, color: "#9ca3af" }}>No files uploaded</span>
+                  )}
                 </div>
               )}
 
+              {/* === NEW: Download signed doc === */}
+              {rec.docStatus === "completed" && (
+                <button onClick={() => handleDownloadDoc(rec)}
+                  style={{ padding: "6px 14px", borderRadius: 8, border: "2px solid #0369a1", background: "white", color: "#0369a1", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>
+                  Download Doc
+                </button>
+              )}
+
+              {/* === NEW: Copy signing link === */}
+              <button onClick={() => handleCopyLink(rec)}
+                style={{ padding: "6px 14px", borderRadius: 8, border: "2px solid #6b7280", background: copiedId === rec.documentId ? "#f0fdf4" : "white", color: copiedId === rec.documentId ? "#15803d" : "#6b7280", fontWeight: 600, fontSize: 13, cursor: "pointer", transition: "all .2s" }}>
+                {copiedId === rec.documentId ? "Copied!" : "Copy Link"}
+              </button>
+
+              {/* === NEW: Resend contract === */}
+              {(rec.docStatus === "sent" || rec.docStatus === "viewed") && (
+                <button onClick={() => handleResendContract(rec)}
+                  disabled={resendingId === rec.documentId}
+                  style={{ padding: "6px 14px", borderRadius: 8, border: "2px solid #b45309", background: "white", color: "#b45309", fontWeight: 600, fontSize: 13, cursor: resendingId === rec.documentId ? "wait" : "pointer", opacity: resendingId === rec.documentId ? 0.6 : 1 }}>
+                  {resendingId === rec.documentId ? "Sending..." : "Resend"}
+                </button>
+              )}
+
+              {/* Fulfillment buttons */}
               {rec.hrStatus === "approved" && !rec.shirtGivenAt && (
                 <button onClick={() => updateFulfillment(rec, "shirt")}
                   style={{ padding: "6px 14px", borderRadius: 8, border: "2px solid #7c3aed", background: "white", color: "#7c3aed", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>
@@ -403,18 +513,9 @@ export default function BackgroundChecksPage() {
         )
       })}
 
-      <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-        {hasMore && (
-          <button onClick={loadMore} disabled={loadingMore}
-            style={{ flex: 1, padding: "10px 20px", borderRadius: 8, border: "2px solid #b45309", background: "white", color: "#b45309", fontWeight: 600, cursor: "pointer" }}>
-            {loadingMore ? "Loading..." : "Load More Records"}
-          </button>
-        )}
-        <button onClick={loadInitial}
-          style={{ flex: 1, padding: "10px 20px", borderRadius: 8, border: "2px solid #1a2f6e", background: "white", color: "#1a2f6e", fontWeight: 600, cursor: "pointer" }}>
-          Refresh
-        </button>
-      </div>
+      <button onClick={loadData} style={{ marginTop: 12, padding: "10px 20px", borderRadius: 8, border: "2px solid #1a2f6e", background: "white", color: "#1a2f6e", fontWeight: 600, cursor: "pointer", width: "100%" }}>
+        Refresh from GHL
+      </button>
     </div>
   )
 }
