@@ -70,11 +70,18 @@ type MergedRecord = {
   loadingFiles: boolean
 }
 
+type Totals = {
+  total: number
+  completed: number
+  sent: number
+  viewed: number
+  draft: number
+}
+
 export default function BackgroundChecksPage() {
   const [records, setRecords] = useState<MergedRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
-  const [loadingProgress, setLoadingProgress] = useState("")
   const [filter, setFilter] = useState("all")
   const [search, setSearch] = useState("")
   const [toast, setToast] = useState("")
@@ -82,25 +89,34 @@ export default function BackgroundChecksPage() {
   const [resendingId, setResendingId] = useState<string | null>(null)
   const [skip, setSkip] = useState(0)
   const [hasMore, setHasMore] = useState(true)
-  const [reachedCutoff, setReachedCutoff] = useState(false)
+  const [totals, setTotals] = useState<Totals | null>(null)
+  const [totalsLoading, setTotalsLoading] = useState(true)
   const supabase = createClient()
 
   function showToast(msg: string) { setToast(msg); setTimeout(() => setToast(""), 3000) }
 
+  // === Fast totals from dedicated API ===
+  const loadTotals = useCallback(async () => {
+    setTotalsLoading(true)
+    try {
+      const res = await fetch("/api/ghl/bg-check-totals")
+      if (res.ok) {
+        const data: Totals = await res.json()
+        setTotals(data)
+      }
+    } catch { /* silent */ }
+    setTotalsLoading(false)
+  }, [])
+
+  // === Load one page of documents for the list ===
   const fetchPage = useCallback(async (currentSkip: number, append: boolean) => {
     if (append) { setLoadingMore(true) } else { setLoading(true) }
     try {
-      setLoadingProgress("Fetching documents...")
       const res = await fetch(`/api/ghl/test?endpoint=/proposals/document?locationId=${LOCATION_ID}%26limit=${PAGE_SIZE}%26skip=${currentSkip}`)
       const data = await res.json()
       const docs: GHLDocument[] = data.documents || []
 
-      if (docs.length === 0) {
-        setHasMore(false)
-        if (!append) setLoading(false)
-        setLoadingMore(false)
-        return
-      }
+      if (docs.length === 0) { setHasMore(false); setLoading(false); setLoadingMore(false); return }
 
       const bgDocs: GHLDocument[] = []
       let hitCutoff = false
@@ -108,16 +124,10 @@ export default function BackgroundChecksPage() {
         if (doc.name === BG_CHECK_DOC_NAME && doc.status !== "draft") {
           bgDocs.push(doc)
         }
-        if (new Date(doc.createdAt) < new Date(CUTOFF_DATE)) {
-          hitCutoff = true
-          break
-        }
+        if (new Date(doc.createdAt) < new Date(CUTOFF_DATE)) { hitCutoff = true; break }
       }
 
-      if (hitCutoff) { setReachedCutoff(true); setHasMore(false) }
-      else if (docs.length < PAGE_SIZE) { setHasMore(false) }
-
-      setLoadingProgress("Loading local data...")
+      if (hitCutoff || docs.length < PAGE_SIZE) setHasMore(false)
 
       const { data: localRecords } = await supabase.from("background_checks").select("*")
       const localMap = new Map<string, LocalRecord>()
@@ -149,34 +159,34 @@ export default function BackgroundChecksPage() {
 
       if (append) {
         setRecords(prev => {
-          const existingIds = new Set(prev.map(r => r.documentId))
-          const unique = newMerged.filter(r => !existingIds.has(r.documentId))
-          return [...prev, ...unique]
+          const ids = new Set(prev.map(r => r.documentId))
+          return [...prev, ...newMerged.filter(r => !ids.has(r.documentId))]
         })
       } else {
         setRecords(newMerged)
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Unknown error"
-      showToast("Error loading data: " + msg)
+      showToast("Error: " + msg)
     }
     setLoading(false)
     setLoadingMore(false)
   }, [supabase])
 
-  useEffect(() => { fetchPage(0, false) }, [fetchPage])
+  useEffect(() => {
+    loadTotals()
+    fetchPage(0, false)
+  }, [loadTotals, fetchPage])
 
   function handleLoadMore() {
-    const nextSkip = skip + PAGE_SIZE
-    setSkip(nextSkip)
-    fetchPage(nextSkip, true)
+    const next = skip + PAGE_SIZE
+    setSkip(next)
+    fetchPage(next, true)
   }
 
   function handleRefresh() {
-    setSkip(0)
-    setHasMore(true)
-    setReachedCutoff(false)
-    setRecords([])
+    setSkip(0); setHasMore(true); setRecords([])
+    loadTotals()
     fetchPage(0, false)
   }
 
@@ -243,13 +253,11 @@ export default function BackgroundChecksPage() {
       const data = await res.json()
       const contact = data.contact
       if (!contact?.customFields) throw new Error("No custom fields")
-
       const files: ContactFiles = {
         selfie: extractFileFromCustomField(contact.customFields, SELFIE_FIELD_ID),
         id: extractFileFromCustomField(contact.customFields, ID_FIELD_ID),
         ssn: extractFileFromCustomField(contact.customFields, SSN_FIELD_ID),
       }
-
       setRecords(prev => prev.map(r => r.documentId === rec.documentId ? { ...r, files, loadingFiles: false } : r))
     } catch {
       setRecords(prev => prev.map(r => r.documentId === rec.documentId ? { ...r, files: {}, loadingFiles: false } : r))
@@ -257,18 +265,13 @@ export default function BackgroundChecksPage() {
     }
   }
 
-  // === FEATURE: Download signed GHL document ===
   function handleDownloadDoc(rec: MergedRecord) {
-    // GHL signed documents can be downloaded via the document URL
-    const url = `https://services.leadconnectorhq.com/proposals/document/${rec.documentId}/download?locationId=${LOCATION_ID}`
-    // Open via our proxy to add auth headers
     window.open(`/api/ghl/test?endpoint=/proposals/document/${rec.documentId}`, "_blank")
-    showToast("Opening document details for " + rec.repName)
+    showToast("Opening document for " + rec.repName)
   }
 
-  // === FEATURE: Resend contract (uses dedicated POST route) ===
   async function handleResendContract(rec: MergedRecord) {
-    if (!confirm("Resend background check contract to " + (rec.repName || rec.repEmail) + "?")) return
+    if (!confirm("Resend contract to " + (rec.repName || rec.repEmail) + "?")) return
     setResendingId(rec.documentId)
     try {
       const res = await fetch("/api/ghl/resend-document", {
@@ -289,27 +292,17 @@ export default function BackgroundChecksPage() {
     setResendingId(null)
   }
 
-  // === FEATURE: Copy signing link ===
   async function handleCopyLink(rec: MergedRecord) {
-    // GHL document signing links follow this pattern
     const link = `https://link.windmarsolaracademy.com/widget/proposal/${rec.documentId}`
     try {
       await navigator.clipboard.writeText(link)
-      setCopiedId(rec.documentId)
-      showToast("Signing link copied!")
-      setTimeout(() => setCopiedId(null), 2500)
     } catch {
-      // Fallback for HTTP or older browsers
-      const textarea = document.createElement("textarea")
-      textarea.value = link
-      document.body.appendChild(textarea)
-      textarea.select()
-      document.execCommand("copy")
-      document.body.removeChild(textarea)
-      setCopiedId(rec.documentId)
-      showToast("Signing link copied!")
-      setTimeout(() => setCopiedId(null), 2500)
+      const ta = document.createElement("textarea")
+      ta.value = link; document.body.appendChild(ta); ta.select(); document.execCommand("copy"); document.body.removeChild(ta)
     }
+    setCopiedId(rec.documentId)
+    showToast("Signing link copied!")
+    setTimeout(() => setCopiedId(null), 2500)
   }
 
   const docColor: Record<string, { bg: string; color: string }> = {
@@ -323,15 +316,9 @@ export default function BackgroundChecksPage() {
     denied: { bg: "#fef2f2", color: "#dc2626" },
   }
 
-  // Search filter
   const searchLower = search.toLowerCase().trim()
   const searchFiltered = searchLower
-    ? records.filter(r =>
-        r.repName.toLowerCase().includes(searchLower) ||
-        r.repEmail.toLowerCase().includes(searchLower) ||
-        r.docStatus.toLowerCase().includes(searchLower) ||
-        r.hrStatus.toLowerCase().includes(searchLower)
-      )
+    ? records.filter(r => r.repName.toLowerCase().includes(searchLower) || r.repEmail.toLowerCase().includes(searchLower) || r.docStatus.toLowerCase().includes(searchLower) || r.hrStatus.toLowerCase().includes(searchLower))
     : records
 
   const filtered = filter === "all" ? searchFiltered :
@@ -341,23 +328,22 @@ export default function BackgroundChecksPage() {
     filter === "done" ? searchFiltered.filter(r => !!(r.shirtGivenAt && r.badgePrintedAt)) :
     searchFiltered
 
-  // Stats always from ALL loaded records
-  const stats = {
-    total: records.length,
-    sent: records.filter(r => r.docStatus === "sent" || r.docStatus === "viewed").length,
-    needsApproval: records.filter(r => r.docStatus === "completed" && r.hrStatus !== "approved").length,
-    needsFulfillment: records.filter(r => r.hrStatus === "approved" && !(r.shirtGivenAt && r.badgePrintedAt)).length,
-    done: records.filter(r => !!(r.shirtGivenAt && r.badgePrintedAt)).length,
-  }
-
   const fmt = (iso: string) => {
     try { return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) } catch { return "-" }
+  }
+
+  // Totals: use API totals (real count), fall back to loaded count
+  const displayTotals = {
+    total: totals?.total ?? records.length,
+    sent: totals ? (totals.sent + totals.viewed) : records.filter(r => r.docStatus === "sent" || r.docStatus === "viewed").length,
+    needsApproval: totals?.completed ?? records.filter(r => r.docStatus === "completed").length,
+    needsFulfillment: records.filter(r => r.hrStatus === "approved" && !(r.shirtGivenAt && r.badgePrintedAt)).length,
+    done: records.filter(r => !!(r.shirtGivenAt && r.badgePrintedAt)).length,
   }
 
   if (loading) return (
     <div style={{ padding: 32, textAlign: "center", color: "#6b7280" }}>
       <div style={{ fontSize: 24, marginBottom: 8 }}>Loading background checks...</div>
-      <div style={{ fontSize: 14 }}>{loadingProgress || "Connecting to GHL Documents API"}</div>
     </div>
   )
 
@@ -367,14 +353,13 @@ export default function BackgroundChecksPage() {
 
       <h1 style={{ fontSize: 22, fontWeight: 700, color: "#1a2f6e", margin: "0 0 16px" }}>HD Background Checks</h1>
 
-      {/* Stats buttons */}
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
         {[
-          { label: "Total", value: stats.total, key: "all", color: "#1a2f6e" },
-          { label: "Sent/Viewed", value: stats.sent, key: "sent", color: "#0369a1" },
-          { label: "Needs Approval", value: stats.needsApproval, key: "completed", color: "#b45309" },
-          { label: "Needs Fulfillment", value: stats.needsFulfillment, key: "approved", color: "#7c3aed" },
-          { label: "Done", value: stats.done, key: "done", color: "#15803d" },
+          { label: "Total", value: displayTotals.total, key: "all", color: "#1a2f6e" },
+          { label: "Sent/Viewed", value: displayTotals.sent, key: "sent", color: "#0369a1" },
+          { label: "Needs Approval", value: displayTotals.needsApproval, key: "completed", color: "#b45309" },
+          { label: "Needs Fulfillment", value: displayTotals.needsFulfillment, key: "approved", color: "#7c3aed" },
+          { label: "Done", value: displayTotals.done, key: "done", color: "#15803d" },
         ].map(s => (
           <button key={s.key} onClick={() => setFilter(s.key)}
             style={{
@@ -382,155 +367,82 @@ export default function BackgroundChecksPage() {
               borderRadius: 10, background: filter === s.key ? s.color : "white", color: filter === s.key ? "white" : s.color,
               cursor: "pointer", textAlign: "center", fontWeight: 600, fontSize: 13, transition: "all .2s",
             }}>
-            <div style={{ fontSize: 22, fontWeight: 700 }}>{s.value}</div>
+            <div style={{ fontSize: 22, fontWeight: 700 }}>
+              {totalsLoading && (s.key === "all" || s.key === "sent" || s.key === "completed") ? "..." : s.value}
+            </div>
             {s.label}
           </button>
         ))}
       </div>
 
-      {/* Search bar */}
       <div style={{ marginBottom: 16, position: "relative" }}>
-        <input
-          type="text"
-          placeholder="Search by name, email, or status..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          style={{
-            width: "100%", padding: "10px 14px", paddingRight: search ? 36 : 14,
-            border: "2px solid #e5e7eb", borderRadius: 10, fontSize: 14,
-            outline: "none", boxSizing: "border-box",
-          }}
+        <input type="text" placeholder="Search by name, email, or status..." value={search} onChange={(e) => setSearch(e.target.value)}
+          style={{ width: "100%", padding: "10px 14px", paddingRight: search ? 36 : 14, border: "2px solid #e5e7eb", borderRadius: 10, fontSize: 14, outline: "none", boxSizing: "border-box" }}
           onFocus={(e) => { e.currentTarget.style.borderColor = "#1a2f6e" }}
           onBlur={(e) => { e.currentTarget.style.borderColor = "#e5e7eb" }}
         />
-        {search && (
-          <button onClick={() => setSearch("")}
-            style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "#9ca3af", lineHeight: 1 }}>
-            {"\u00D7"}
-          </button>
-        )}
+        {search && <button onClick={() => setSearch("")} style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "#9ca3af" }}>{"\u00D7"}</button>}
       </div>
 
       {filtered.length === 0 ? (
-        <div style={{ textAlign: "center", color: "#9ca3af", padding: 40, fontSize: 15 }}>
-          {search ? `No results for "${search}"` : "No records in this category"}
-        </div>
+        <div style={{ textAlign: "center", color: "#9ca3af", padding: 40, fontSize: 15 }}>{search ? `No results for "${search}"` : "No records in this category"}</div>
       ) : filtered.map(rec => {
         const dc = docColor[rec.docStatus] || docColor.sent
         const hc = hrColor[rec.hrStatus] || hrColor.pending
         const isDone = !!(rec.shirtGivenAt && rec.badgePrintedAt)
 
         return (
-          <div key={rec.documentId} style={{
-            border: "1px solid #e5e7eb", borderRadius: 12, padding: 16, marginBottom: 10,
-            background: isDone ? "#f9fafb" : "white", opacity: isDone ? 0.75 : 1,
-          }}>
+          <div key={rec.documentId} style={{ border: "1px solid #e5e7eb", borderRadius: 12, padding: 16, marginBottom: 10, background: isDone ? "#f9fafb" : "white", opacity: isDone ? 0.75 : 1 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
               <div style={{ fontWeight: 700, fontSize: 16, color: "#1a2f6e" }}>{rec.repName}</div>
               <div style={{ display: "flex", gap: 6 }}>
                 <span style={{ padding: "3px 10px", borderRadius: 20, fontSize: 12, fontWeight: 600, background: dc.bg, color: dc.color }}>{rec.docStatus.toUpperCase()}</span>
-                {rec.docStatus === "completed" && (
-                  <span style={{ padding: "3px 10px", borderRadius: 20, fontSize: 12, fontWeight: 600, background: hc.bg, color: hc.color }}>HR: {rec.hrStatus.toUpperCase()}</span>
-                )}
+                {rec.docStatus === "completed" && <span style={{ padding: "3px 10px", borderRadius: 20, fontSize: 12, fontWeight: 600, background: hc.bg, color: hc.color }}>HR: {rec.hrStatus.toUpperCase()}</span>}
               </div>
             </div>
 
             <div style={{ fontSize: 13, color: "#6b7280", marginBottom: 8 }}>
-              <span>{rec.repEmail}</span>
-              <span style={{ margin: "0 8px" }}>{"\u2022"}</span>
-              <span>Sent: {fmt(rec.createdAt)}</span>
+              <span>{rec.repEmail}</span><span style={{ margin: "0 8px" }}>{"\u2022"}</span><span>Sent: {fmt(rec.createdAt)}</span>
               {rec.signedDate && <><span style={{ margin: "0 8px" }}>{"\u2022"}</span><span>Signed: {fmt(rec.signedDate)}</span></>}
             </div>
 
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
-              {/* HR Approve/Deny */}
               {rec.docStatus === "completed" && rec.hrStatus === "pending" && (
                 <>
-                  <button onClick={() => updateHRStatus(rec, "approved")}
-                    style={{ padding: "6px 14px", borderRadius: 8, border: "none", background: "#15803d", color: "white", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>
-                    Approve
-                  </button>
-                  <button onClick={() => updateHRStatus(rec, "denied")}
-                    style={{ padding: "6px 14px", borderRadius: 8, border: "none", background: "#dc2626", color: "white", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>
-                    Deny
-                  </button>
+                  <button onClick={() => updateHRStatus(rec, "approved")} style={{ padding: "6px 14px", borderRadius: 8, border: "none", background: "#15803d", color: "white", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>Approve</button>
+                  <button onClick={() => updateHRStatus(rec, "denied")} style={{ padding: "6px 14px", borderRadius: 8, border: "none", background: "#dc2626", color: "white", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>Deny</button>
                 </>
               )}
 
-              {/* Load Documents (contact files) */}
               {rec.docStatus === "completed" && !rec.files && !rec.loadingFiles && (
-                <button onClick={() => loadContactFiles(rec)}
-                  style={{ padding: "6px 14px", borderRadius: 8, border: "2px solid #1a2f6e", background: "white", color: "#1a2f6e", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>
-                  Load Documents
-                </button>
+                <button onClick={() => loadContactFiles(rec)} style={{ padding: "6px 14px", borderRadius: 8, border: "2px solid #1a2f6e", background: "white", color: "#1a2f6e", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>Load Documents</button>
               )}
-              {rec.loadingFiles && (
-                <span style={{ fontSize: 13, color: "#6b7280" }}>Loading files...</span>
-              )}
+              {rec.loadingFiles && <span style={{ fontSize: 13, color: "#6b7280" }}>Loading files...</span>}
 
-              {/* Contact files (Selfie, ID, SSN) */}
               {rec.files && (
                 <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                  {rec.files.selfie && (
-                    <a href={rec.files.selfie.url} target="_blank" rel="noopener noreferrer"
-                      style={{ padding: "6px 12px", borderRadius: 8, background: "#eff6ff", color: "#1d4ed8", fontSize: 12, fontWeight: 600, textDecoration: "none" }}>
-                      Selfie
-                    </a>
-                  )}
-                  {rec.files.id && (
-                    <a href={rec.files.id.url} target="_blank" rel="noopener noreferrer"
-                      style={{ padding: "6px 12px", borderRadius: 8, background: "#eff6ff", color: "#1d4ed8", fontSize: 12, fontWeight: 600, textDecoration: "none" }}>
-                      ID
-                    </a>
-                  )}
-                  {rec.files.ssn && (
-                    <a href={rec.files.ssn.url} target="_blank" rel="noopener noreferrer"
-                      style={{ padding: "6px 12px", borderRadius: 8, background: "#eff6ff", color: "#1d4ed8", fontSize: 12, fontWeight: 600, textDecoration: "none" }}>
-                      SSN Card
-                    </a>
-                  )}
-                  {!rec.files.selfie && !rec.files.id && !rec.files.ssn && (
-                    <span style={{ fontSize: 12, color: "#9ca3af" }}>No files uploaded</span>
-                  )}
+                  {rec.files.selfie && <a href={rec.files.selfie.url} target="_blank" rel="noopener noreferrer" style={{ padding: "6px 12px", borderRadius: 8, background: "#eff6ff", color: "#1d4ed8", fontSize: 12, fontWeight: 600, textDecoration: "none" }}>Selfie</a>}
+                  {rec.files.id && <a href={rec.files.id.url} target="_blank" rel="noopener noreferrer" style={{ padding: "6px 12px", borderRadius: 8, background: "#eff6ff", color: "#1d4ed8", fontSize: 12, fontWeight: 600, textDecoration: "none" }}>ID</a>}
+                  {rec.files.ssn && <a href={rec.files.ssn.url} target="_blank" rel="noopener noreferrer" style={{ padding: "6px 12px", borderRadius: 8, background: "#eff6ff", color: "#1d4ed8", fontSize: 12, fontWeight: 600, textDecoration: "none" }}>SSN Card</a>}
+                  {!rec.files.selfie && !rec.files.id && !rec.files.ssn && <span style={{ fontSize: 12, color: "#9ca3af" }}>No files uploaded</span>}
                 </div>
               )}
 
-              {/* Download signed doc */}
-              {rec.docStatus === "completed" && (
-                <button onClick={() => handleDownloadDoc(rec)}
-                  style={{ padding: "6px 14px", borderRadius: 8, border: "2px solid #0369a1", background: "white", color: "#0369a1", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>
-                  Download Doc
-                </button>
-              )}
+              {rec.docStatus === "completed" && <button onClick={() => handleDownloadDoc(rec)} style={{ padding: "6px 14px", borderRadius: 8, border: "2px solid #0369a1", background: "white", color: "#0369a1", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>Download Doc</button>}
 
-              {/* Copy signing link */}
-              <button onClick={() => handleCopyLink(rec)}
-                style={{ padding: "6px 14px", borderRadius: 8, border: copiedId === rec.documentId ? "2px solid #15803d" : "2px solid #6b7280", background: copiedId === rec.documentId ? "#f0fdf4" : "white", color: copiedId === rec.documentId ? "#15803d" : "#6b7280", fontWeight: 600, fontSize: 13, cursor: "pointer", transition: "all .2s" }}>
+              <button onClick={() => handleCopyLink(rec)} style={{ padding: "6px 14px", borderRadius: 8, border: copiedId === rec.documentId ? "2px solid #15803d" : "2px solid #6b7280", background: copiedId === rec.documentId ? "#f0fdf4" : "white", color: copiedId === rec.documentId ? "#15803d" : "#6b7280", fontWeight: 600, fontSize: 13, cursor: "pointer", transition: "all .2s" }}>
                 {copiedId === rec.documentId ? "\u2713 Copied!" : "Copy Link"}
               </button>
 
-              {/* Resend contract */}
               {(rec.docStatus === "sent" || rec.docStatus === "viewed") && (
-                <button onClick={() => handleResendContract(rec)}
-                  disabled={resendingId === rec.documentId}
+                <button onClick={() => handleResendContract(rec)} disabled={resendingId === rec.documentId}
                   style={{ padding: "6px 14px", borderRadius: 8, border: "2px solid #b45309", background: "white", color: "#b45309", fontWeight: 600, fontSize: 13, cursor: resendingId === rec.documentId ? "wait" : "pointer", opacity: resendingId === rec.documentId ? 0.6 : 1 }}>
                   {resendingId === rec.documentId ? "Sending..." : "Resend"}
                 </button>
               )}
 
-              {/* Fulfillment buttons */}
-              {rec.hrStatus === "approved" && !rec.shirtGivenAt && (
-                <button onClick={() => updateFulfillment(rec, "shirt")}
-                  style={{ padding: "6px 14px", borderRadius: 8, border: "2px solid #7c3aed", background: "white", color: "#7c3aed", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>
-                  Give Shirt
-                </button>
-              )}
-              {rec.hrStatus === "approved" && rec.shirtGivenAt && !rec.badgePrintedAt && (
-                <button onClick={() => updateFulfillment(rec, "badge")}
-                  style={{ padding: "6px 14px", borderRadius: 8, border: "2px solid #7c3aed", background: "white", color: "#7c3aed", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>
-                  Print Badge
-                </button>
-              )}
+              {rec.hrStatus === "approved" && !rec.shirtGivenAt && <button onClick={() => updateFulfillment(rec, "shirt")} style={{ padding: "6px 14px", borderRadius: 8, border: "2px solid #7c3aed", background: "white", color: "#7c3aed", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>Give Shirt</button>}
+              {rec.hrStatus === "approved" && rec.shirtGivenAt && !rec.badgePrintedAt && <button onClick={() => updateFulfillment(rec, "badge")} style={{ padding: "6px 14px", borderRadius: 8, border: "2px solid #7c3aed", background: "white", color: "#7c3aed", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>Print Badge</button>}
 
               {rec.shirtGivenAt && <span style={{ padding: "6px 12px", borderRadius: 8, background: "#f0fdf4", color: "#15803d", fontSize: 12, fontWeight: 600 }}>Shirt {fmt(rec.shirtGivenAt)}</span>}
               {rec.badgePrintedAt && <span style={{ padding: "6px 12px", borderRadius: 8, background: "#f0fdf4", color: "#15803d", fontSize: 12, fontWeight: 600 }}>Badge {fmt(rec.badgePrintedAt)}</span>}
@@ -540,23 +452,15 @@ export default function BackgroundChecksPage() {
         )
       })}
 
-      {/* Load More / Refresh buttons */}
       <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-        {hasMore && !reachedCutoff && (
+        {hasMore && (
           <button onClick={handleLoadMore} disabled={loadingMore}
             style={{ flex: 1, padding: "10px 20px", borderRadius: 8, border: "none", background: "#1a2f6e", color: "white", fontWeight: 600, cursor: loadingMore ? "wait" : "pointer", opacity: loadingMore ? 0.7 : 1 }}>
             {loadingMore ? "Loading more..." : `Load More (showing ${records.length})`}
           </button>
         )}
-        {reachedCutoff && (
-          <div style={{ flex: 1, padding: "10px 20px", textAlign: "center", fontSize: 13, color: "#6b7280" }}>
-            All {records.length} contracts since Jan 2025 loaded
-          </div>
-        )}
-        <button onClick={handleRefresh}
-          style={{ padding: "10px 20px", borderRadius: 8, border: "2px solid #1a2f6e", background: "white", color: "#1a2f6e", fontWeight: 600, cursor: "pointer", minWidth: 120 }}>
-          Refresh
-        </button>
+        {!hasMore && <div style={{ flex: 1, padding: "10px", textAlign: "center", fontSize: 13, color: "#6b7280" }}>Showing all {records.length} loaded contracts</div>}
+        <button onClick={handleRefresh} style={{ padding: "10px 20px", borderRadius: 8, border: "2px solid #1a2f6e", background: "white", color: "#1a2f6e", fontWeight: 600, cursor: "pointer", minWidth: 120 }}>Refresh</button>
       </div>
     </div>
   )
