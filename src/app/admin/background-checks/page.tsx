@@ -1,852 +1,420 @@
-﻿"use client";
+﻿'use client'
+import { useEffect, useState, useCallback, useMemo } from "react"
+import { createClient } from "@/lib/supabase/client"
 
-import { useState, useEffect, useCallback, useRef } from "react";
+const BG_CHECK_DOC_NAME = "Windmar- Home Depot Background Check"
+const LOCATION_ID = "eTTRenV5nD46gQbZ5A9E"
+const PAGE_SIZE = 20
+const INITIAL_PAGES = 3
 
-// ─── Types ───────────────────────────────────────────────────────────────────
-interface DocumentLink {
-  url: string;
-  title?: string;
-  type?: string;
+const SELFIE_FIELD_ID = "IvtzPRyBRw6fUpvsLQZ0"
+const ID_FIELD_ID = "WpmuIT4Pdot4M644rxtt"
+const SSN_FIELD_ID = "yHDtP3x1ZLCAEzbbLoBE"
+
+type GHLDocument = {
+  documentId: string
+  name: string
+  status: string
+  createdAt: string
+  updatedAt: string
+  recipients: {
+    id: string
+    firstName: string
+    lastName: string
+    email: string
+    contactName: string
+    hasCompleted: boolean
+    signedDate?: string
+  }[]
 }
 
-interface Document {
-  id: string;
-  name: string;
-  status: string;
-  contactId?: string;
-  contactName?: string;
-  contactEmail?: string;
-  createdAt: string;
-  updatedAt: string;
-  links?: DocumentLink[];
-  sentTo?: { email?: string; name?: string }[];
-  [key: string]: unknown;
+type LocalRecord = {
+  id: string
+  ghl_document_id: string
+  hr_status: string
+  approved_at: string | null
+  approved_by: string | null
+  shirt_given_at: string | null
+  shirt_given_by: string | null
+  badge_printed_at: string | null
+  badge_printed_by: string | null
+  notes: string | null
 }
 
-interface ApiResponse {
-  documents: Document[];
-  total: number;
-  count: number;
+type FileInfo = { url: string; name: string }
+type ContactFiles = { selfie?: FileInfo; id?: FileInfo; ssn?: FileInfo }
+
+type MergedRecord = {
+  documentId: string
+  contactId: string
+  repName: string
+  repEmail: string
+  docStatus: string
+  createdAt: string
+  updatedAt: string
+  signedDate: string | null
+  hrStatus: string
+  approvedAt: string | null
+  shirtGivenAt: string | null
+  badgePrintedAt: string | null
+  localId: string | null
+  files: ContactFiles | null
+  loadingFiles: boolean
 }
 
-interface Totals {
-  all: number;
-  completed: number;
-  sent: number;
-  draft: number;
-  viewed: number;
-}
-
-// ─── Constants ───────────────────────────────────────────────────────────────
-const LOCATION_ID = "eTTRenV5nD46gQbZ5A9E";
-const DOC_NAME_FILTER = "Windmar- Home Depot Background Check";
-const PAGE_SIZE = 20;
-
-// Custom field IDs for contact file downloads
-const CUSTOM_FIELDS = {
-  selfie: "IvtzPRyBRw6fUpvsLQZ0",
-  id: "WpmuIT4Pdot4M644rxtt",
-  ssn: "yHDtP3x1ZLCAEzbbLoBE",
-};
-
-// ─── Helper: Format date ─────────────────────────────────────────────────────
-function formatDate(dateStr: string): string {
-  if (!dateStr) return "\u2014";
-  try {
-    const d = new Date(dateStr);
-    return d.toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
-  } catch {
-    return "\u2014";
-  }
-}
-
-// ─── Helper: Status badge color ──────────────────────────────────────────────
-function statusColor(status: string): string {
-  const s = (status || "").toLowerCase();
-  if (s === "completed" || s === "accepted" || s === "signed")
-    return "bg-green-100 text-green-800 border-green-200";
-  if (s === "sent" || s === "waiting" || s === "pending")
-    return "bg-yellow-100 text-yellow-800 border-yellow-200";
-  if (s === "viewed")
-    return "bg-purple-100 text-purple-800 border-purple-200";
-  if (s === "draft") return "bg-gray-100 text-gray-600 border-gray-200";
-  if (s === "declined" || s === "expired" || s === "voided")
-    return "bg-red-100 text-red-800 border-red-200";
-  return "bg-blue-100 text-blue-800 border-blue-200";
-}
-
-// ─── Main Page Component ─────────────────────────────────────────────────────
 export default function BackgroundChecksPage() {
-  // Data state
-  const [documents, setDocuments] = useState<Document[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [skip, setSkip] = useState(0);
-  const [hasMore, setHasMore] = useState(true);
+  const [records, setRecords] = useState<MergedRecord[]>([])
+  const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [loadingProgress, setLoadingProgress] = useState("")
+  const [filter, setFilter] = useState("all")
+  const [search, setSearch] = useState("")
+  const [toast, setToast] = useState("")
+  const [currentSkip, setCurrentSkip] = useState(0)
+  const [hasMore, setHasMore] = useState(true)
+  const supabase = createClient()
 
-  // Totals state - always the full count from ALL contracts
-  const [totals, setTotals] = useState<Totals | null>(null);
-  const [totalsLoading, setTotalsLoading] = useState(true);
+  function showToast(msg: string) { setToast(msg); setTimeout(() => setToast(""), 3000) }
 
-  // Search state
-  const [searchQuery, setSearchQuery] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
-  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const fetchPages = useCallback(async (startSkip: number, numPages: number): Promise<{ docs: GHLDocument[]; nextSkip: number; moreAvailable: boolean }> => {
+    const bgDocs: GHLDocument[] = []
+    let skip = startSkip
+    let moreAvailable = true
 
-  // Action states
-  const [resendingId, setResendingId] = useState<string | null>(null);
-  const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [downloadingId, setDownloadingId] = useState<string | null>(null);
-  const [actionMessage, setActionMessage] = useState<{
-    id: string;
-    type: "success" | "error";
-    text: string;
-  } | null>(null);
+    for (let i = 0; i < numPages; i++) {
+      const res = await fetch(`/api/ghl/test?endpoint=/proposals/document?locationId=${LOCATION_ID}%26limit=${PAGE_SIZE}%26skip=${skip}`)
+      const data = await res.json()
+      const docs = data.documents || []
 
-  // Expanded row for details
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+      if (docs.length === 0) { moreAvailable = false; break }
 
-  // ─── Fetch totals (runs once on mount, always full count) ───────────────
-  const fetchTotals = useCallback(async () => {
-    try {
-      setTotalsLoading(true);
-      const res = await fetch("/api/ghl/background-check-totals");
-      if (res.ok) {
-        const data: Totals = await res.json();
-        setTotals(data);
+      for (const doc of docs) {
+        if (doc.name === BG_CHECK_DOC_NAME && doc.status !== "draft") {
+          bgDocs.push(doc)
+        }
       }
-    } catch (err) {
-      console.error("Failed to fetch totals:", err);
-    } finally {
-      setTotalsLoading(false);
+
+      skip += PAGE_SIZE
+      if (docs.length < PAGE_SIZE) { moreAvailable = false; break }
     }
-  }, []);
 
-  useEffect(() => {
-    fetchTotals();
-  }, [fetchTotals]);
+    return { docs: bgDocs, nextSkip: skip, moreAvailable }
+  }, [])
 
-  // ─── Debounced search ────────────────────────────────────────────────────
-  useEffect(() => {
-    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
-    searchTimeoutRef.current = setTimeout(() => {
-      setDebouncedSearch(searchQuery);
-    }, 400);
-    return () => {
-      if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
-    };
-  }, [searchQuery]);
-
-  // Reset when search changes
-  useEffect(() => {
-    setDocuments([]);
-    setSkip(0);
-    setHasMore(true);
-    setError(null);
-  }, [debouncedSearch]);
-
-  // ─── Fetch documents ────────────────────────────────────────────────────
-  const fetchDocuments = useCallback(
-    async (currentSkip: number, append: boolean = false) => {
-      try {
-        if (append) {
-          setLoadingMore(true);
-        } else {
-          setLoading(true);
-        }
-        setError(null);
-
-        const params = new URLSearchParams({
-          locationId: LOCATION_ID,
-          limit: PAGE_SIZE.toString(),
-          skip: currentSkip.toString(),
-        });
-
-        if (debouncedSearch) {
-          params.set("query", debouncedSearch);
-        }
-
-        const endpoint = `/proposals/document?${params.toString()}`;
-        const res = await fetch(
-          `/api/ghl/test?endpoint=${encodeURIComponent(endpoint)}`
-        );
-
-        if (!res.ok) {
-          throw new Error(`API error: ${res.status}`);
-        }
-
-        const data: ApiResponse = await res.json();
-
-        const filtered = (data.documents || []).filter((doc) =>
-          (doc.name || "").includes(DOC_NAME_FILTER)
-        );
-
-        if (append) {
-          setDocuments((prev) => [...prev, ...filtered]);
-        } else {
-          setDocuments(filtered);
-        }
-
-        const allDocs = data.documents || [];
-        if (allDocs.length < PAGE_SIZE) {
-          setHasMore(false);
-        }
-      } catch (err) {
-        console.error("Fetch error:", err);
-        setError(
-          err instanceof Error ? err.message : "Failed to fetch documents"
-        );
-      } finally {
-        setLoading(false);
-        setLoadingMore(false);
-      }
-    },
-    [debouncedSearch]
-  );
-
-  useEffect(() => {
-    fetchDocuments(0, false);
-  }, [fetchDocuments]);
-
-  // ─── Load More ──────────────────────────────────────────────────────────
-  const handleLoadMore = () => {
-    const nextSkip = skip + PAGE_SIZE;
-    setSkip(nextSkip);
-    fetchDocuments(nextSkip, true);
-  };
-
-  // ─── Feature 1: Download signed document ────────────────────────────────
-  const handleDownloadDocument = async (doc: Document) => {
-    setDownloadingId(doc.id);
-    setActionMessage(null);
-
-    try {
-      if (doc.links && doc.links.length > 0) {
-        const signedLink = doc.links.find(
-          (link) =>
-            link.type === "signed" ||
-            link.type === "completed" ||
-            link.type === "pdf" ||
-            link.url?.includes("pdf")
-        );
-        const downloadUrl = signedLink?.url || doc.links[0]?.url;
-
-        if (downloadUrl) {
-          window.open(downloadUrl, "_blank", "noopener,noreferrer");
-          setActionMessage({
-            id: doc.id,
-            type: "success",
-            text: "Document opened in new tab",
-          });
-        } else {
-          setActionMessage({
-            id: doc.id,
-            type: "error",
-            text: "No download link found",
-          });
-        }
-      } else {
-        setActionMessage({
-          id: doc.id,
-          type: "error",
-          text: "No signed document link available",
-        });
-      }
-    } catch (err) {
-      console.error("Download error:", err);
-      setActionMessage({
-        id: doc.id,
-        type: "error",
-        text: "Failed to download document",
-      });
-    } finally {
-      setDownloadingId(null);
-      setTimeout(() => setActionMessage(null), 4000);
+  const mergeWithLocal = useCallback(async (docs: GHLDocument[]): Promise<MergedRecord[]> => {
+    const { data: localRecords } = await supabase.from("background_checks").select("*")
+    const localMap = new Map<string, LocalRecord>()
+    if (localRecords) {
+      localRecords.forEach((r: LocalRecord) => { localMap.set(r.ghl_document_id, r) })
     }
-  };
 
-  // ─── Feature 2: Resend contract ─────────────────────────────────────────
-  const handleResendContract = async (doc: Document) => {
-    if (
-      !confirm(
-        `Resend background check contract to ${doc.contactName || doc.contactEmail || "this contact"}?`
+    return docs.map(doc => {
+      const recipient = doc.recipients[0]
+      const local = localMap.get(doc.documentId)
+      return {
+        documentId: doc.documentId,
+        contactId: recipient?.id || "",
+        repName: recipient?.contactName || "Unknown",
+        repEmail: recipient?.email || "",
+        docStatus: doc.status,
+        createdAt: doc.createdAt,
+        updatedAt: doc.updatedAt,
+        signedDate: recipient?.signedDate || null,
+        hrStatus: local?.hr_status || "pending",
+        approvedAt: local?.approved_at || null,
+        shirtGivenAt: local?.shirt_given_at || null,
+        badgePrintedAt: local?.badge_printed_at || null,
+        localId: local?.id || null,
+        files: null,
+        loadingFiles: false,
+      }
+    }).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+  }, [supabase])
+
+  const loadInitial = useCallback(async () => {
+    setLoading(true)
+    setLoadingProgress("Fetching recent background checks...")
+    try {
+      const { docs, nextSkip, moreAvailable } = await fetchPages(0, INITIAL_PAGES)
+      const merged = await mergeWithLocal(docs)
+      setRecords(merged)
+      setCurrentSkip(nextSkip)
+      setHasMore(moreAvailable)
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Unknown error"
+      showToast("Error: " + msg)
+    }
+    setLoading(false)
+  }, [fetchPages, mergeWithLocal])
+
+  const loadMore = useCallback(async () => {
+    setLoadingMore(true)
+    try {
+      const { docs, nextSkip, moreAvailable } = await fetchPages(currentSkip, 3)
+      if (docs.length > 0) {
+        const merged = await mergeWithLocal([...docs])
+        setRecords(prev => {
+          const existingIds = new Set(prev.map(r => r.documentId))
+          const newOnes = merged.filter(r => !existingIds.has(r.documentId))
+          return [...prev, ...newOnes].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+        })
+      }
+      setCurrentSkip(nextSkip)
+      setHasMore(moreAvailable)
+      if (docs.length === 0) showToast("No more records found")
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Unknown error"
+      showToast("Error: " + msg)
+    }
+    setLoadingMore(false)
+  }, [currentSkip, fetchPages, mergeWithLocal])
+
+  useEffect(() => { loadInitial() }, [loadInitial])
+
+  async function ensureLocalRecord(rec: MergedRecord): Promise<string> {
+    if (rec.localId) return rec.localId
+    const { data, error } = await supabase.from("background_checks").insert({
+      ghl_document_id: rec.documentId,
+      rep_name: rec.repName,
+      rep_email: rec.repEmail,
+      document_status: rec.docStatus,
+      hr_status: "pending",
+      fulfillment_status: "pending",
+    }).select().single()
+    if (error) { showToast("Error: " + error.message); return "" }
+    return data.id
+  }
+
+  async function updateHRStatus(rec: MergedRecord, status: string) {
+    const localId = await ensureLocalRecord(rec)
+    if (!localId) return
+    const updates: Record<string, string> = { hr_status: status }
+    if (status === "approved") { updates.approved_at = new Date().toISOString(); updates.approved_by = "Admin" }
+    await supabase.from("background_checks").update(updates).eq("id", localId)
+    showToast(rec.repName + " marked as " + status)
+    loadInitial()
+  }
+
+  async function updateFulfillment(rec: MergedRecord, field: string) {
+    const localId = await ensureLocalRecord(rec)
+    if (!localId) return
+    const now = new Date().toISOString()
+    const updates: Record<string, string> = {}
+    if (field === "shirt") { updates.shirt_given_at = now; updates.shirt_given_by = "Admin"; updates.fulfillment_status = "shirt_given" }
+    else if (field === "badge") { updates.badge_printed_at = now; updates.badge_printed_by = "Admin" }
+    if (field === "badge" && rec.shirtGivenAt) updates.fulfillment_status = "complete"
+    if (field === "shirt" && rec.badgePrintedAt) updates.fulfillment_status = "complete"
+    await supabase.from("background_checks").update(updates).eq("id", localId)
+    showToast("Updated " + rec.repName)
+    loadInitial()
+  }
+
+  function extractFileFromCustomField(customFields: Record<string, unknown>[], fieldId: string): FileInfo | undefined {
+    const field = customFields.find((f: Record<string, unknown>) => f.id === fieldId)
+    if (!field || !field.value || typeof field.value !== "object") return undefined
+    const val = field.value as Record<string, Record<string, unknown>>
+    const keys = Object.keys(val)
+    if (keys.length === 0) return undefined
+    const entry = val[keys[0]] as { url?: string; meta?: { originalname?: string } }
+    if (!entry?.url) return undefined
+    return { url: entry.url, name: entry.meta?.originalname || "file" }
+  }
+
+  async function loadContactFiles(rec: MergedRecord) {
+    if (!rec.contactId) return
+    setRecords(prev => prev.map(r => r.documentId === rec.documentId ? { ...r, loadingFiles: true } : r))
+    try {
+      const res = await fetch(`/api/ghl/test?endpoint=/contacts/${rec.contactId}`)
+      const data = await res.json()
+      const contact = data.contact
+      if (!contact?.customFields) throw new Error("No custom fields")
+      const files: ContactFiles = {
+        selfie: extractFileFromCustomField(contact.customFields, SELFIE_FIELD_ID),
+        id: extractFileFromCustomField(contact.customFields, ID_FIELD_ID),
+        ssn: extractFileFromCustomField(contact.customFields, SSN_FIELD_ID),
+      }
+      setRecords(prev => prev.map(r => r.documentId === rec.documentId ? { ...r, files, loadingFiles: false } : r))
+    } catch {
+      setRecords(prev => prev.map(r => r.documentId === rec.documentId ? { ...r, files: {}, loadingFiles: false } : r))
+      showToast("Could not load files for " + rec.repName)
+    }
+  }
+
+  const docColor: Record<string, { bg: string; color: string }> = {
+    sent: { bg: "#f0f9ff", color: "#0369a1" },
+    viewed: { bg: "#fef9c3", color: "#a16207" },
+    completed: { bg: "#f0fdf4", color: "#15803d" },
+  }
+  const hrColor: Record<string, { bg: string; color: string }> = {
+    pending: { bg: "#f3f4f6", color: "#6b7280" },
+    approved: { bg: "#f0fdf4", color: "#15803d" },
+    denied: { bg: "#fef2f2", color: "#dc2626" },
+  }
+
+  const filtered = useMemo(() => {
+    let list = filter === "all" ? records :
+      filter === "sent" ? records.filter(r => r.docStatus === "sent" || r.docStatus === "viewed") :
+      filter === "completed" ? records.filter(r => r.docStatus === "completed" && r.hrStatus !== "approved") :
+      filter === "approved" ? records.filter(r => r.hrStatus === "approved" && !(r.shirtGivenAt && r.badgePrintedAt)) :
+      filter === "done" ? records.filter(r => !!(r.shirtGivenAt && r.badgePrintedAt)) :
+      records
+
+    if (search.trim()) {
+      const q = search.toLowerCase().trim()
+      list = list.filter(r =>
+        r.repName.toLowerCase().includes(q) ||
+        r.repEmail.toLowerCase().includes(q)
       )
-    ) {
-      return;
     }
+    return list
+  }, [records, filter, search])
 
-    setResendingId(doc.id);
-    setActionMessage(null);
+  const stats = useMemo(() => ({
+    total: records.length,
+    sent: records.filter(r => r.docStatus === "sent" || r.docStatus === "viewed").length,
+    needsApproval: records.filter(r => r.docStatus === "completed" && r.hrStatus !== "approved").length,
+    needsFulfillment: records.filter(r => r.hrStatus === "approved" && !(r.shirtGivenAt && r.badgePrintedAt)).length,
+    done: records.filter(r => !!(r.shirtGivenAt && r.badgePrintedAt)).length,
+  }), [records])
 
-    try {
-      const res = await fetch("/api/ghl/resend-document", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          documentId: doc.id,
-          locationId: LOCATION_ID,
-        }),
-      });
+  const fmt = (iso: string) => {
+    try { return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) } catch { return "-" }
+  }
 
-      const data = await res.json();
+  if (loading) return (
+    <div style={{ padding: 32, textAlign: "center", color: "#6b7280" }}>
+      <div style={{ fontSize: 24, marginBottom: 8 }}>Loading background checks...</div>
+      <div style={{ fontSize: 14 }}>{loadingProgress}</div>
+    </div>
+  )
 
-      if (res.ok && data.success !== false) {
-        setActionMessage({
-          id: doc.id,
-          type: "success",
-          text: "Contract resent successfully!",
-        });
-      } else {
-        setActionMessage({
-          id: doc.id,
-          type: "error",
-          text: data.error || data.message || "Failed to resend contract",
-        });
-      }
-    } catch (err) {
-      console.error("Resend error:", err);
-      setActionMessage({
-        id: doc.id,
-        type: "error",
-        text: "Failed to resend",
-      });
-    } finally {
-      setResendingId(null);
-      setTimeout(() => setActionMessage(null), 4000);
-    }
-  };
-
-  // ─── Feature 3: Copy signing link ──────────────────────────────────────
-  const handleCopyLink = async (doc: Document) => {
-    setCopiedId(null);
-    setActionMessage(null);
-
-    try {
-      let signingLink = "";
-
-      if (doc.links && doc.links.length > 0) {
-        const shareLink = doc.links.find(
-          (link) =>
-            link.type === "share" ||
-            link.type === "signing" ||
-            link.type === "view" ||
-            link.url?.includes("proposal") ||
-            link.url?.includes("sign")
-        );
-        signingLink = shareLink?.url || doc.links[0]?.url || "";
-      }
-
-      if (!signingLink) {
-        signingLink = `https://app.gohighlevel.com/proposals/document/view/${doc.id}`;
-      }
-
-      await navigator.clipboard.writeText(signingLink);
-      setCopiedId(doc.id);
-      setActionMessage({
-        id: doc.id,
-        type: "success",
-        text: "Link copied to clipboard!",
-      });
-
-      setTimeout(() => setCopiedId(null), 2500);
-      setTimeout(() => setActionMessage(null), 3000);
-    } catch (err) {
-      console.error("Copy error:", err);
-      setActionMessage({
-        id: doc.id,
-        type: "error",
-        text: "Failed to copy link",
-      });
-      setTimeout(() => setActionMessage(null), 3000);
-    }
-  };
-
-  // ─── Render ─────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <div className="bg-white border-b border-gray-200 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">
-                HD Background Checks
-              </h1>
-              <p className="text-sm text-gray-500 mt-1">
-                Manage Home Depot background check documents via GHL
-              </p>
-            </div>
-            <div className="flex items-center gap-3">
-              <button
-                onClick={fetchTotals}
-                title="Refresh totals"
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
-              >
-                <svg
-                  className={`w-3.5 h-3.5 ${totalsLoading ? "animate-spin" : ""}`}
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                  />
-                </svg>
-                Refresh Totals
-              </button>
-              <a
-                href="/admin"
-                className="inline-flex items-center text-sm text-blue-600 hover:text-blue-800 font-medium"
-              >
-                <svg className="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                </svg>
-                Back to Admin
-              </a>
-            </div>
-          </div>
-        </div>
+    <div style={{ padding: "16px 20px", maxWidth: 900, margin: "0 auto" }}>
+      {toast && <div style={{ position: "fixed", top: 20, right: 20, background: "#1a2f6e", color: "white", padding: "12px 20px", borderRadius: 8, zIndex: 9999, fontSize: 14, boxShadow: "0 4px 12px rgba(0,0,0,.2)" }}>{toast}</div>}
+
+      <h1 style={{ fontSize: 22, fontWeight: 700, color: "#1a2f6e", margin: "0 0 12px" }}>HD Background Checks</h1>
+
+      <input
+        type="text"
+        placeholder="Search by name or email..."
+        value={search}
+        onChange={e => setSearch(e.target.value)}
+        style={{ width: "100%", padding: "10px 14px", borderRadius: 10, border: "2px solid #e5e7eb", fontSize: 14, marginBottom: 12, outline: "none" }}
+      />
+
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
+        {[
+          { label: "Total", value: stats.total, key: "all", color: "#1a2f6e" },
+          { label: "Sent/Viewed", value: stats.sent, key: "sent", color: "#0369a1" },
+          { label: "Needs Approval", value: stats.needsApproval, key: "completed", color: "#b45309" },
+          { label: "Needs Fulfillment", value: stats.needsFulfillment, key: "approved", color: "#7c3aed" },
+          { label: "Done", value: stats.done, key: "done", color: "#15803d" },
+        ].map(s => (
+          <button key={s.key} onClick={() => setFilter(s.key)}
+            style={{
+              flex: "1 1 100px", padding: "10px 8px", border: filter === s.key ? `2px solid ${s.color}` : "2px solid #e5e7eb",
+              borderRadius: 10, background: filter === s.key ? s.color : "white", color: filter === s.key ? "white" : s.color,
+              cursor: "pointer", textAlign: "center", fontWeight: 600, fontSize: 13, transition: "all .2s",
+            }}>
+            <div style={{ fontSize: 22, fontWeight: 700 }}>{s.value}</div>
+            {s.label}
+          </button>
+        ))}
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        {/* ── Totals Cards - always full count from ALL contracts ─────── */}
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-6">
-          {/* Total */}
-          <div className="bg-white rounded-lg border border-gray-200 p-4 shadow-sm">
-            <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">
-              Total Contracts
-            </div>
-            {totalsLoading ? (
-              <div className="flex items-center gap-2 mt-2">
-                <div className="w-4 h-4 border-2 border-gray-200 border-t-gray-500 rounded-full animate-spin" />
-                <span className="text-xs text-gray-400">Loading...</span>
+      {filtered.length === 0 ? (
+        <div style={{ textAlign: "center", color: "#9ca3af", padding: 40, fontSize: 15 }}>No records found</div>
+      ) : filtered.map(rec => {
+        const dc = docColor[rec.docStatus] || docColor.sent
+        const hc = hrColor[rec.hrStatus] || hrColor.pending
+        const isDone = !!(rec.shirtGivenAt && rec.badgePrintedAt)
+
+        return (
+          <div key={rec.documentId} style={{
+            border: "1px solid #e5e7eb", borderRadius: 12, padding: 16, marginBottom: 10,
+            background: isDone ? "#f9fafb" : "white", opacity: isDone ? 0.75 : 1,
+          }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
+              <div style={{ fontWeight: 700, fontSize: 16, color: "#1a2f6e" }}>{rec.repName}</div>
+              <div style={{ display: "flex", gap: 6 }}>
+                <span style={{ padding: "3px 10px", borderRadius: 20, fontSize: 12, fontWeight: 600, background: dc.bg, color: dc.color }}>{rec.docStatus.toUpperCase()}</span>
+                {rec.docStatus === "completed" && (
+                  <span style={{ padding: "3px 10px", borderRadius: 20, fontSize: 12, fontWeight: 600, background: hc.bg, color: hc.color }}>HR: {rec.hrStatus.toUpperCase()}</span>
+                )}
               </div>
-            ) : (
-              <div className="text-2xl font-bold text-gray-900 mt-1">
-                {totals?.all?.toLocaleString() ?? "\u2014"}
-              </div>
-            )}
-          </div>
-
-          {/* Completed / Signed */}
-          <div className="bg-white rounded-lg border border-green-200 p-4 shadow-sm">
-            <div className="text-xs font-medium text-green-600 uppercase tracking-wide">
-              Completed
-            </div>
-            {totalsLoading ? (
-              <div className="flex items-center gap-2 mt-2">
-                <div className="w-4 h-4 border-2 border-green-200 border-t-green-600 rounded-full animate-spin" />
-                <span className="text-xs text-gray-400">Loading...</span>
-              </div>
-            ) : (
-              <div className="text-2xl font-bold text-green-700 mt-1">
-                {totals?.completed?.toLocaleString() ?? "\u2014"}
-              </div>
-            )}
-          </div>
-
-          {/* Sent */}
-          <div className="bg-white rounded-lg border border-yellow-200 p-4 shadow-sm">
-            <div className="text-xs font-medium text-yellow-600 uppercase tracking-wide">
-              Sent
-            </div>
-            {totalsLoading ? (
-              <div className="flex items-center gap-2 mt-2">
-                <div className="w-4 h-4 border-2 border-yellow-200 border-t-yellow-600 rounded-full animate-spin" />
-                <span className="text-xs text-gray-400">Loading...</span>
-              </div>
-            ) : (
-              <div className="text-2xl font-bold text-yellow-700 mt-1">
-                {totals?.sent?.toLocaleString() ?? "\u2014"}
-              </div>
-            )}
-          </div>
-
-          {/* Viewed */}
-          <div className="bg-white rounded-lg border border-purple-200 p-4 shadow-sm">
-            <div className="text-xs font-medium text-purple-600 uppercase tracking-wide">
-              Viewed
-            </div>
-            {totalsLoading ? (
-              <div className="flex items-center gap-2 mt-2">
-                <div className="w-4 h-4 border-2 border-purple-200 border-t-purple-600 rounded-full animate-spin" />
-                <span className="text-xs text-gray-400">Loading...</span>
-              </div>
-            ) : (
-              <div className="text-2xl font-bold text-purple-700 mt-1">
-                {totals?.viewed?.toLocaleString() ?? "\u2014"}
-              </div>
-            )}
-          </div>
-
-          {/* Draft */}
-          <div className="bg-white rounded-lg border border-gray-200 p-4 shadow-sm">
-            <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">
-              Draft
-            </div>
-            {totalsLoading ? (
-              <div className="flex items-center gap-2 mt-2">
-                <div className="w-4 h-4 border-2 border-gray-200 border-t-gray-500 rounded-full animate-spin" />
-                <span className="text-xs text-gray-400">Loading...</span>
-              </div>
-            ) : (
-              <div className="text-2xl font-bold text-gray-600 mt-1">
-                {totals?.draft?.toLocaleString() ?? "\u2014"}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* ── Search Bar ───────────────────────────────────────────────── */}
-        <div className="mb-6">
-          <div className="relative">
-            <svg
-              className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-              />
-            </svg>
-            <input
-              type="text"
-              placeholder="Search by name, email, or status..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-3 bg-white border border-gray-300 rounded-lg text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 shadow-sm"
-            />
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery("")}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-              >
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* ── Error State ──────────────────────────────────────────────── */}
-        {error && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
-            <div className="flex items-center gap-2">
-              <svg className="w-5 h-5 text-red-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <p className="text-sm text-red-700">{error}</p>
-              <button
-                onClick={() => {
-                  setSkip(0);
-                  fetchDocuments(0, false);
-                }}
-                className="ml-auto text-sm font-medium text-red-600 hover:text-red-800 underline"
-              >
-                Retry
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* ── Loading State ────────────────────────────────────────────── */}
-        {loading && (
-          <div className="flex flex-col items-center justify-center py-20">
-            <div className="w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
-            <p className="text-sm text-gray-500 mt-3">
-              Loading background checks...
-            </p>
-          </div>
-        )}
-
-        {/* ── Documents Table ──────────────────────────────────────────── */}
-        {!loading && documents.length > 0 && (
-          <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                      Contact
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                      Status
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider hidden sm:table-cell">
-                      Date
-                    </th>
-                    <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-100">
-                  {documents.map((doc) => (
-                    <tr
-                      key={doc.id}
-                      className="hover:bg-gray-50 transition-colors"
-                    >
-                      {/* Contact */}
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 font-bold text-xs flex-shrink-0">
-                            {(
-                              doc.contactName ||
-                              doc.contactEmail ||
-                              "?"
-                            )
-                              .charAt(0)
-                              .toUpperCase()}
-                          </div>
-                          <div className="min-w-0">
-                            <p className="text-sm font-medium text-gray-900 truncate">
-                              {doc.contactName || "Unknown"}
-                            </p>
-                            {doc.contactEmail && (
-                              <p className="text-xs text-gray-500 truncate">
-                                {doc.contactEmail}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                      </td>
-
-                      {/* Status */}
-                      <td className="px-4 py-3">
-                        <span
-                          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${statusColor(doc.status)}`}
-                        >
-                          {doc.status || "Unknown"}
-                        </span>
-                      </td>
-
-                      {/* Date */}
-                      <td className="px-4 py-3 text-sm text-gray-500 hidden sm:table-cell">
-                        {formatDate(doc.updatedAt || doc.createdAt)}
-                      </td>
-
-                      {/* Actions */}
-                      <td className="px-4 py-3">
-                        <div className="flex items-center justify-end gap-1">
-                          {/* Action message toast (inline) */}
-                          {actionMessage?.id === doc.id && (
-                            <span
-                              className={`text-xs font-medium mr-2 animate-pulse ${
-                                actionMessage.type === "success"
-                                  ? "text-green-600"
-                                  : "text-red-500"
-                              }`}
-                            >
-                              {actionMessage.text}
-                            </span>
-                          )}
-
-                          {/* Download signed document */}
-                          <button
-                            onClick={() => handleDownloadDocument(doc)}
-                            disabled={downloadingId === doc.id}
-                            title="Download signed document"
-                            className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors disabled:opacity-50"
-                          >
-                            {downloadingId === doc.id ? (
-                              <div className="w-4 h-4 border-2 border-blue-200 border-t-blue-600 rounded-full animate-spin" />
-                            ) : (
-                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                              </svg>
-                            )}
-                          </button>
-
-                          {/* Copy signing link */}
-                          <button
-                            onClick={() => handleCopyLink(doc)}
-                            title="Copy signing link"
-                            className={`p-2 rounded-lg transition-colors ${
-                              copiedId === doc.id
-                                ? "text-green-600 bg-green-50"
-                                : "text-gray-400 hover:text-purple-600 hover:bg-purple-50"
-                            }`}
-                          >
-                            {copiedId === doc.id ? (
-                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                              </svg>
-                            ) : (
-                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-                              </svg>
-                            )}
-                          </button>
-
-                          {/* Resend contract */}
-                          <button
-                            onClick={() => handleResendContract(doc)}
-                            disabled={resendingId === doc.id}
-                            title="Resend contract"
-                            className="p-2 text-gray-400 hover:text-orange-600 hover:bg-orange-50 rounded-lg transition-colors disabled:opacity-50"
-                          >
-                            {resendingId === doc.id ? (
-                              <div className="w-4 h-4 border-2 border-orange-200 border-t-orange-600 rounded-full animate-spin" />
-                            ) : (
-                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                              </svg>
-                            )}
-                          </button>
-
-                          {/* Expand/details toggle */}
-                          <button
-                            onClick={() =>
-                              setExpandedId(
-                                expandedId === doc.id ? null : doc.id
-                              )
-                            }
-                            title="Show details"
-                            className={`p-2 rounded-lg transition-colors ${
-                              expandedId === doc.id
-                                ? "text-blue-600 bg-blue-50"
-                                : "text-gray-400 hover:text-gray-600 hover:bg-gray-100"
-                            }`}
-                          >
-                            <svg
-                              className={`w-4 h-4 transition-transform ${expandedId === doc.id ? "rotate-180" : ""}`}
-                              fill="none"
-                              viewBox="0 0 24 24"
-                              stroke="currentColor"
-                            >
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                            </svg>
-                          </button>
-                        </div>
-
-                        {/* Expanded details row */}
-                        {expandedId === doc.id && (
-                          <div className="mt-3 pt-3 border-t border-gray-100">
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-gray-500">
-                              <div>
-                                <span className="font-medium text-gray-700">
-                                  Doc ID:{" "}
-                                </span>
-                                <span className="font-mono">{doc.id}</span>
-                              </div>
-                              {doc.contactId && (
-                                <div>
-                                  <span className="font-medium text-gray-700">
-                                    Contact ID:{" "}
-                                  </span>
-                                  <span className="font-mono">
-                                    {doc.contactId}
-                                  </span>
-                                </div>
-                              )}
-                              <div>
-                                <span className="font-medium text-gray-700">
-                                  Created:{" "}
-                                </span>
-                                {formatDate(doc.createdAt)}
-                              </div>
-                              <div>
-                                <span className="font-medium text-gray-700">
-                                  Updated:{" "}
-                                </span>
-                                {formatDate(doc.updatedAt)}
-                              </div>
-                              {doc.links && doc.links.length > 0 && (
-                                <div className="sm:col-span-2">
-                                  <span className="font-medium text-gray-700">
-                                    Links:{" "}
-                                  </span>
-                                  {doc.links.map((link, i) => (
-                                    <a
-                                      key={i}
-                                      href={link.url}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="text-blue-600 hover:underline mr-3"
-                                    >
-                                      {link.title || link.type || `Link ${i + 1}`}
-                                    </a>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
             </div>
 
-            {/* Load More button */}
-            {hasMore && (
-              <div className="px-4 py-4 bg-gray-50 border-t border-gray-200 text-center">
-                <button
-                  onClick={handleLoadMore}
-                  disabled={loadingMore}
-                  className="inline-flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:bg-blue-300 transition-colors shadow-sm"
-                >
-                  {loadingMore ? (
-                    <>
-                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      Loading...
-                    </>
-                  ) : (
-                    <>
-                      Load More
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                      </svg>
-                    </>
-                  )}
+            <div style={{ fontSize: 13, color: "#6b7280", marginBottom: 8 }}>
+              <span>{rec.repEmail}</span>
+              <span style={{ margin: "0 8px" }}>{"\u2022"}</span>
+              <span>Sent: {fmt(rec.createdAt)}</span>
+              {rec.signedDate && <><span style={{ margin: "0 8px" }}>{"\u2022"}</span><span>Signed: {fmt(rec.signedDate)}</span></>}
+            </div>
+
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+              {rec.docStatus === "completed" && rec.hrStatus === "pending" && (
+                <>
+                  <button onClick={() => updateHRStatus(rec, "approved")}
+                    style={{ padding: "6px 14px", borderRadius: 8, border: "none", background: "#15803d", color: "white", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>
+                    Approve
+                  </button>
+                  <button onClick={() => updateHRStatus(rec, "denied")}
+                    style={{ padding: "6px 14px", borderRadius: 8, border: "none", background: "#dc2626", color: "white", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>
+                    Deny
+                  </button>
+                </>
+              )}
+
+              {rec.docStatus === "completed" && !rec.files && !rec.loadingFiles && (
+                <button onClick={() => loadContactFiles(rec)}
+                  style={{ padding: "6px 14px", borderRadius: 8, border: "2px solid #1a2f6e", background: "white", color: "#1a2f6e", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>
+                  Load Documents
                 </button>
-                <p className="text-xs text-gray-400 mt-2">
-                  Showing {documents.length} of{" "}
-                  {totals?.all?.toLocaleString() ?? "..."} contracts
-                </p>
-              </div>
-            )}
-          </div>
-        )}
+              )}
+              {rec.loadingFiles && <span style={{ fontSize: 13, color: "#6b7280" }}>Loading files...</span>}
 
-        {/* ── Empty State ──────────────────────────────────────────────── */}
-        {!loading && !error && documents.length === 0 && (
-          <div className="text-center py-20">
-            <svg
-              className="w-12 h-12 text-gray-300 mx-auto mb-4"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={1.5}
-                d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-              />
-            </svg>
-            <p className="text-gray-500 text-sm">
-              {debouncedSearch
-                ? `No background checks found for "${debouncedSearch}"`
-                : "No background check documents found"}
-            </p>
+              {rec.files && (
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  {rec.files.selfie && <a href={rec.files.selfie.url} target="_blank" rel="noopener noreferrer" style={{ padding: "6px 12px", borderRadius: 8, background: "#eff6ff", color: "#1d4ed8", fontSize: 12, fontWeight: 600, textDecoration: "none" }}>Selfie</a>}
+                  {rec.files.id && <a href={rec.files.id.url} target="_blank" rel="noopener noreferrer" style={{ padding: "6px 12px", borderRadius: 8, background: "#eff6ff", color: "#1d4ed8", fontSize: 12, fontWeight: 600, textDecoration: "none" }}>ID</a>}
+                  {rec.files.ssn && <a href={rec.files.ssn.url} target="_blank" rel="noopener noreferrer" style={{ padding: "6px 12px", borderRadius: 8, background: "#eff6ff", color: "#1d4ed8", fontSize: 12, fontWeight: 600, textDecoration: "none" }}>SSN Card</a>}
+                  {!rec.files.selfie && !rec.files.id && !rec.files.ssn && <span style={{ fontSize: 12, color: "#9ca3af" }}>No files uploaded</span>}
+                </div>
+              )}
+
+              {rec.hrStatus === "approved" && !rec.shirtGivenAt && (
+                <button onClick={() => updateFulfillment(rec, "shirt")}
+                  style={{ padding: "6px 14px", borderRadius: 8, border: "2px solid #7c3aed", background: "white", color: "#7c3aed", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>
+                  Give Shirt
+                </button>
+              )}
+              {rec.hrStatus === "approved" && rec.shirtGivenAt && !rec.badgePrintedAt && (
+                <button onClick={() => updateFulfillment(rec, "badge")}
+                  style={{ padding: "6px 14px", borderRadius: 8, border: "2px solid #7c3aed", background: "white", color: "#7c3aed", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>
+                  Print Badge
+                </button>
+              )}
+
+              {rec.shirtGivenAt && <span style={{ padding: "6px 12px", borderRadius: 8, background: "#f0fdf4", color: "#15803d", fontSize: 12, fontWeight: 600 }}>Shirt {fmt(rec.shirtGivenAt)}</span>}
+              {rec.badgePrintedAt && <span style={{ padding: "6px 12px", borderRadius: 8, background: "#f0fdf4", color: "#15803d", fontSize: 12, fontWeight: 600 }}>Badge {fmt(rec.badgePrintedAt)}</span>}
+              {isDone && <span style={{ padding: "6px 12px", borderRadius: 8, background: "#15803d", color: "white", fontSize: 12, fontWeight: 700 }}>COMPLETE</span>}
+            </div>
           </div>
+        )
+      })}
+
+      <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+        {hasMore && (
+          <button onClick={loadMore} disabled={loadingMore}
+            style={{ flex: 1, padding: "10px 20px", borderRadius: 8, border: "2px solid #b45309", background: "white", color: "#b45309", fontWeight: 600, cursor: "pointer" }}>
+            {loadingMore ? "Loading..." : "Load More Records"}
+          </button>
         )}
+        <button onClick={loadInitial}
+          style={{ flex: 1, padding: "10px 20px", borderRadius: 8, border: "2px solid #1a2f6e", background: "white", color: "#1a2f6e", fontWeight: 600, cursor: "pointer" }}>
+          Refresh
+        </button>
       </div>
     </div>
-  );
+  )
 }
