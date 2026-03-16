@@ -1,11 +1,11 @@
 ﻿'use client'
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useState, useCallback, useMemo } from "react"
 import { createClient } from "@/lib/supabase/client"
 
 const BG_CHECK_DOC_NAME = "Windmar- Home Depot Background Check"
 const LOCATION_ID = "eTTRenV5nD46gQbZ5A9E"
 const PAGE_SIZE = 20
-const CUTOFF_DATE = "2025-01-01T00:00:00.000Z"
+const INITIAL_PAGES = 3
 
 const SELFIE_FIELD_ID = "IvtzPRyBRw6fUpvsLQZ0"
 const ID_FIELD_ID = "WpmuIT4Pdot4M644rxtt"
@@ -41,16 +41,8 @@ type LocalRecord = {
   notes: string | null
 }
 
-type FileInfo = {
-  url: string
-  name: string
-}
-
-type ContactFiles = {
-  selfie?: FileInfo
-  id?: FileInfo
-  ssn?: FileInfo
-}
+type FileInfo = { url: string; name: string }
+type ContactFiles = { selfie?: FileInfo; id?: FileInfo; ssn?: FileInfo }
 
 type MergedRecord = {
   documentId: string
@@ -73,82 +65,111 @@ type MergedRecord = {
 export default function BackgroundChecksPage() {
   const [records, setRecords] = useState<MergedRecord[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
   const [loadingProgress, setLoadingProgress] = useState("")
   const [filter, setFilter] = useState("all")
+  const [search, setSearch] = useState("")
   const [toast, setToast] = useState("")
+  const [currentSkip, setCurrentSkip] = useState(0)
+  const [hasMore, setHasMore] = useState(true)
   const supabase = createClient()
 
   function showToast(msg: string) { setToast(msg); setTimeout(() => setToast(""), 3000) }
 
-  const loadData = useCallback(async () => {
-    setLoading(true)
-    try {
-      let allBgDocs: GHLDocument[] = []
-      let skip = 0
-      let keepGoing = true
+  const fetchPages = useCallback(async (startSkip: number, numPages: number): Promise<{ docs: GHLDocument[]; nextSkip: number; moreAvailable: boolean }> => {
+    const bgDocs: GHLDocument[] = []
+    let skip = startSkip
+    let moreAvailable = true
 
-      while (keepGoing) {
-        setLoadingProgress(`Fetching documents... (${allBgDocs.length} found, page ${Math.floor(skip / PAGE_SIZE) + 1})`)
-        const res = await fetch(`/api/ghl/test?endpoint=/proposals/document?locationId=${LOCATION_ID}%26limit=${PAGE_SIZE}%26skip=${skip}`)
-        const data = await res.json()
-        const docs = data.documents || []
+    for (let i = 0; i < numPages; i++) {
+      const res = await fetch(`/api/ghl/test?endpoint=/proposals/document?locationId=${LOCATION_ID}%26limit=${PAGE_SIZE}%26skip=${skip}`)
+      const data = await res.json()
+      const docs = data.documents || []
 
-        if (docs.length === 0) { keepGoing = false; break }
+      if (docs.length === 0) { moreAvailable = false; break }
 
-        for (const doc of docs) {
-          if (doc.name === BG_CHECK_DOC_NAME && doc.status !== "draft") {
-            allBgDocs.push(doc)
-          }
-          if (new Date(doc.createdAt) < new Date(CUTOFF_DATE)) {
-            keepGoing = false
-            break
-          }
+      for (const doc of docs) {
+        if (doc.name === BG_CHECK_DOC_NAME && doc.status !== "draft") {
+          bgDocs.push(doc)
         }
-
-        skip += PAGE_SIZE
-        if (skip > 6000) keepGoing = false
       }
 
-      setLoadingProgress(`Found ${allBgDocs.length} background checks. Loading local data...`)
-
-      const { data: localRecords } = await supabase.from("background_checks").select("*")
-      const localMap = new Map<string, LocalRecord>()
-      if (localRecords) {
-        localRecords.forEach((r: LocalRecord) => { localMap.set(r.ghl_document_id, r) })
-      }
-
-      const merged: MergedRecord[] = allBgDocs.map(doc => {
-        const recipient = doc.recipients[0]
-        const local = localMap.get(doc.documentId)
-        return {
-          documentId: doc.documentId,
-          contactId: recipient?.id || "",
-          repName: recipient?.contactName || "Unknown",
-          repEmail: recipient?.email || "",
-          docStatus: doc.status,
-          createdAt: doc.createdAt,
-          updatedAt: doc.updatedAt,
-          signedDate: recipient?.signedDate || null,
-          hrStatus: local?.hr_status || "pending",
-          approvedAt: local?.approved_at || null,
-          shirtGivenAt: local?.shirt_given_at || null,
-          badgePrintedAt: local?.badge_printed_at || null,
-          localId: local?.id || null,
-          files: null,
-          loadingFiles: false,
-        }
-      })
-
-      merged.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-      setRecords(merged)
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Unknown error"
-      showToast("Error loading data: " + msg)
+      skip += PAGE_SIZE
+      if (docs.length < PAGE_SIZE) { moreAvailable = false; break }
     }
-    setLoading(false)
+
+    return { docs: bgDocs, nextSkip: skip, moreAvailable }
+  }, [])
+
+  const mergeWithLocal = useCallback(async (docs: GHLDocument[]): Promise<MergedRecord[]> => {
+    const { data: localRecords } = await supabase.from("background_checks").select("*")
+    const localMap = new Map<string, LocalRecord>()
+    if (localRecords) {
+      localRecords.forEach((r: LocalRecord) => { localMap.set(r.ghl_document_id, r) })
+    }
+
+    return docs.map(doc => {
+      const recipient = doc.recipients[0]
+      const local = localMap.get(doc.documentId)
+      return {
+        documentId: doc.documentId,
+        contactId: recipient?.id || "",
+        repName: recipient?.contactName || "Unknown",
+        repEmail: recipient?.email || "",
+        docStatus: doc.status,
+        createdAt: doc.createdAt,
+        updatedAt: doc.updatedAt,
+        signedDate: recipient?.signedDate || null,
+        hrStatus: local?.hr_status || "pending",
+        approvedAt: local?.approved_at || null,
+        shirtGivenAt: local?.shirt_given_at || null,
+        badgePrintedAt: local?.badge_printed_at || null,
+        localId: local?.id || null,
+        files: null,
+        loadingFiles: false,
+      }
+    }).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
   }, [supabase])
 
-  useEffect(() => { loadData() }, [loadData])
+  const loadInitial = useCallback(async () => {
+    setLoading(true)
+    setLoadingProgress("Fetching recent background checks...")
+    try {
+      const { docs, nextSkip, moreAvailable } = await fetchPages(0, INITIAL_PAGES)
+      const merged = await mergeWithLocal(docs)
+      setRecords(merged)
+      setCurrentSkip(nextSkip)
+      setHasMore(moreAvailable)
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Unknown error"
+      showToast("Error: " + msg)
+    }
+    setLoading(false)
+  }, [fetchPages, mergeWithLocal])
+
+  const loadMore = useCallback(async () => {
+    setLoadingMore(true)
+    try {
+      const { docs, nextSkip, moreAvailable } = await fetchPages(currentSkip, 3)
+      if (docs.length > 0) {
+        const merged = await mergeWithLocal([...docs])
+        setRecords(prev => {
+          const existingIds = new Set(prev.map(r => r.documentId))
+          const newOnes = merged.filter(r => !existingIds.has(r.documentId))
+          return [...prev, ...newOnes].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+        })
+      }
+      setCurrentSkip(nextSkip)
+      setHasMore(moreAvailable)
+      if (docs.length === 0) showToast("No more records found")
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Unknown error"
+      showToast("Error: " + msg)
+    }
+    setLoadingMore(false)
+  }, [currentSkip, fetchPages, mergeWithLocal])
+
+  useEffect(() => { loadInitial() }, [loadInitial])
 
   async function ensureLocalRecord(rec: MergedRecord): Promise<string> {
     if (rec.localId) return rec.localId
@@ -171,7 +192,7 @@ export default function BackgroundChecksPage() {
     if (status === "approved") { updates.approved_at = new Date().toISOString(); updates.approved_by = "Admin" }
     await supabase.from("background_checks").update(updates).eq("id", localId)
     showToast(rec.repName + " marked as " + status)
-    loadData()
+    loadInitial()
   }
 
   async function updateFulfillment(rec: MergedRecord, field: string) {
@@ -185,7 +206,7 @@ export default function BackgroundChecksPage() {
     if (field === "shirt" && rec.badgePrintedAt) updates.fulfillment_status = "complete"
     await supabase.from("background_checks").update(updates).eq("id", localId)
     showToast("Updated " + rec.repName)
-    loadData()
+    loadInitial()
   }
 
   function extractFileFromCustomField(customFields: Record<string, unknown>[], fieldId: string): FileInfo | undefined {
@@ -194,8 +215,7 @@ export default function BackgroundChecksPage() {
     const val = field.value as Record<string, Record<string, unknown>>
     const keys = Object.keys(val)
     if (keys.length === 0) return undefined
-    const firstKey = keys[0]
-    const entry = val[firstKey] as { url?: string; meta?: { originalname?: string } }
+    const entry = val[keys[0]] as { url?: string; meta?: { originalname?: string } }
     if (!entry?.url) return undefined
     return { url: entry.url, name: entry.meta?.originalname || "file" }
   }
@@ -208,13 +228,11 @@ export default function BackgroundChecksPage() {
       const data = await res.json()
       const contact = data.contact
       if (!contact?.customFields) throw new Error("No custom fields")
-
       const files: ContactFiles = {
         selfie: extractFileFromCustomField(contact.customFields, SELFIE_FIELD_ID),
         id: extractFileFromCustomField(contact.customFields, ID_FIELD_ID),
         ssn: extractFileFromCustomField(contact.customFields, SSN_FIELD_ID),
       }
-
       setRecords(prev => prev.map(r => r.documentId === rec.documentId ? { ...r, files, loadingFiles: false } : r))
     } catch {
       setRecords(prev => prev.map(r => r.documentId === rec.documentId ? { ...r, files: {}, loadingFiles: false } : r))
@@ -233,20 +251,31 @@ export default function BackgroundChecksPage() {
     denied: { bg: "#fef2f2", color: "#dc2626" },
   }
 
-  const filtered = filter === "all" ? records :
-    filter === "sent" ? records.filter(r => r.docStatus === "sent" || r.docStatus === "viewed") :
-    filter === "completed" ? records.filter(r => r.docStatus === "completed" && r.hrStatus !== "approved") :
-    filter === "approved" ? records.filter(r => r.hrStatus === "approved" && !(r.shirtGivenAt && r.badgePrintedAt)) :
-    filter === "done" ? records.filter(r => !!(r.shirtGivenAt && r.badgePrintedAt)) :
-    records
+  const filtered = useMemo(() => {
+    let list = filter === "all" ? records :
+      filter === "sent" ? records.filter(r => r.docStatus === "sent" || r.docStatus === "viewed") :
+      filter === "completed" ? records.filter(r => r.docStatus === "completed" && r.hrStatus !== "approved") :
+      filter === "approved" ? records.filter(r => r.hrStatus === "approved" && !(r.shirtGivenAt && r.badgePrintedAt)) :
+      filter === "done" ? records.filter(r => !!(r.shirtGivenAt && r.badgePrintedAt)) :
+      records
 
-  const stats = {
+    if (search.trim()) {
+      const q = search.toLowerCase().trim()
+      list = list.filter(r =>
+        r.repName.toLowerCase().includes(q) ||
+        r.repEmail.toLowerCase().includes(q)
+      )
+    }
+    return list
+  }, [records, filter, search])
+
+  const stats = useMemo(() => ({
     total: records.length,
     sent: records.filter(r => r.docStatus === "sent" || r.docStatus === "viewed").length,
     needsApproval: records.filter(r => r.docStatus === "completed" && r.hrStatus !== "approved").length,
     needsFulfillment: records.filter(r => r.hrStatus === "approved" && !(r.shirtGivenAt && r.badgePrintedAt)).length,
     done: records.filter(r => !!(r.shirtGivenAt && r.badgePrintedAt)).length,
-  }
+  }), [records])
 
   const fmt = (iso: string) => {
     try { return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) } catch { return "-" }
@@ -255,7 +284,7 @@ export default function BackgroundChecksPage() {
   if (loading) return (
     <div style={{ padding: 32, textAlign: "center", color: "#6b7280" }}>
       <div style={{ fontSize: 24, marginBottom: 8 }}>Loading background checks...</div>
-      <div style={{ fontSize: 14 }}>{loadingProgress || "Connecting to GHL Documents API"}</div>
+      <div style={{ fontSize: 14 }}>{loadingProgress}</div>
     </div>
   )
 
@@ -263,7 +292,15 @@ export default function BackgroundChecksPage() {
     <div style={{ padding: "16px 20px", maxWidth: 900, margin: "0 auto" }}>
       {toast && <div style={{ position: "fixed", top: 20, right: 20, background: "#1a2f6e", color: "white", padding: "12px 20px", borderRadius: 8, zIndex: 9999, fontSize: 14, boxShadow: "0 4px 12px rgba(0,0,0,.2)" }}>{toast}</div>}
 
-      <h1 style={{ fontSize: 22, fontWeight: 700, color: "#1a2f6e", margin: "0 0 16px" }}>HD Background Checks</h1>
+      <h1 style={{ fontSize: 22, fontWeight: 700, color: "#1a2f6e", margin: "0 0 12px" }}>HD Background Checks</h1>
+
+      <input
+        type="text"
+        placeholder="Search by name or email..."
+        value={search}
+        onChange={e => setSearch(e.target.value)}
+        style={{ width: "100%", padding: "10px 14px", borderRadius: 10, border: "2px solid #e5e7eb", fontSize: 14, marginBottom: 12, outline: "none" }}
+      />
 
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
         {[
@@ -286,7 +323,7 @@ export default function BackgroundChecksPage() {
       </div>
 
       {filtered.length === 0 ? (
-        <div style={{ textAlign: "center", color: "#9ca3af", padding: 40, fontSize: 15 }}>No records in this category</div>
+        <div style={{ textAlign: "center", color: "#9ca3af", padding: 40, fontSize: 15 }}>No records found</div>
       ) : filtered.map(rec => {
         const dc = docColor[rec.docStatus] || docColor.sent
         const hc = hrColor[rec.hrStatus] || hrColor.pending
@@ -334,33 +371,14 @@ export default function BackgroundChecksPage() {
                   Load Documents
                 </button>
               )}
-              {rec.loadingFiles && (
-                <span style={{ fontSize: 13, color: "#6b7280" }}>Loading files...</span>
-              )}
+              {rec.loadingFiles && <span style={{ fontSize: 13, color: "#6b7280" }}>Loading files...</span>}
 
               {rec.files && (
                 <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                  {rec.files.selfie && (
-                    <a href={rec.files.selfie.url} target="_blank" rel="noopener noreferrer"
-                      style={{ padding: "6px 12px", borderRadius: 8, background: "#eff6ff", color: "#1d4ed8", fontSize: 12, fontWeight: 600, textDecoration: "none" }}>
-                      Selfie
-                    </a>
-                  )}
-                  {rec.files.id && (
-                    <a href={rec.files.id.url} target="_blank" rel="noopener noreferrer"
-                      style={{ padding: "6px 12px", borderRadius: 8, background: "#eff6ff", color: "#1d4ed8", fontSize: 12, fontWeight: 600, textDecoration: "none" }}>
-                      ID
-                    </a>
-                  )}
-                  {rec.files.ssn && (
-                    <a href={rec.files.ssn.url} target="_blank" rel="noopener noreferrer"
-                      style={{ padding: "6px 12px", borderRadius: 8, background: "#eff6ff", color: "#1d4ed8", fontSize: 12, fontWeight: 600, textDecoration: "none" }}>
-                      SSN Card
-                    </a>
-                  )}
-                  {!rec.files.selfie && !rec.files.id && !rec.files.ssn && (
-                    <span style={{ fontSize: 12, color: "#9ca3af" }}>No files uploaded</span>
-                  )}
+                  {rec.files.selfie && <a href={rec.files.selfie.url} target="_blank" rel="noopener noreferrer" style={{ padding: "6px 12px", borderRadius: 8, background: "#eff6ff", color: "#1d4ed8", fontSize: 12, fontWeight: 600, textDecoration: "none" }}>Selfie</a>}
+                  {rec.files.id && <a href={rec.files.id.url} target="_blank" rel="noopener noreferrer" style={{ padding: "6px 12px", borderRadius: 8, background: "#eff6ff", color: "#1d4ed8", fontSize: 12, fontWeight: 600, textDecoration: "none" }}>ID</a>}
+                  {rec.files.ssn && <a href={rec.files.ssn.url} target="_blank" rel="noopener noreferrer" style={{ padding: "6px 12px", borderRadius: 8, background: "#eff6ff", color: "#1d4ed8", fontSize: 12, fontWeight: 600, textDecoration: "none" }}>SSN Card</a>}
+                  {!rec.files.selfie && !rec.files.id && !rec.files.ssn && <span style={{ fontSize: 12, color: "#9ca3af" }}>No files uploaded</span>}
                 </div>
               )}
 
@@ -385,9 +403,18 @@ export default function BackgroundChecksPage() {
         )
       })}
 
-      <button onClick={loadData} style={{ marginTop: 12, padding: "10px 20px", borderRadius: 8, border: "2px solid #1a2f6e", background: "white", color: "#1a2f6e", fontWeight: 600, cursor: "pointer", width: "100%" }}>
-        Refresh from GHL
-      </button>
+      <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+        {hasMore && (
+          <button onClick={loadMore} disabled={loadingMore}
+            style={{ flex: 1, padding: "10px 20px", borderRadius: 8, border: "2px solid #b45309", background: "white", color: "#b45309", fontWeight: 600, cursor: "pointer" }}>
+            {loadingMore ? "Loading..." : "Load More Records"}
+          </button>
+        )}
+        <button onClick={loadInitial}
+          style={{ flex: 1, padding: "10px 20px", borderRadius: 8, border: "2px solid #1a2f6e", background: "white", color: "#1a2f6e", fontWeight: 600, cursor: "pointer" }}>
+          Refresh
+        </button>
+      </div>
     </div>
   )
 }
