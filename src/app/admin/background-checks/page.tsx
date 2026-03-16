@@ -17,7 +17,6 @@ type GHLDocument = {
   status: string
   createdAt: string
   updatedAt: string
-  links?: { url: string; title?: string; type?: string }[]
   recipients: {
     id: string
     firstName: string
@@ -69,52 +68,56 @@ type MergedRecord = {
   localId: string | null
   files: ContactFiles | null
   loadingFiles: boolean
-  links: { url: string; title?: string; type?: string }[]
 }
 
 export default function BackgroundChecksPage() {
   const [records, setRecords] = useState<MergedRecord[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
   const [loadingProgress, setLoadingProgress] = useState("")
   const [filter, setFilter] = useState("all")
   const [search, setSearch] = useState("")
   const [toast, setToast] = useState("")
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [resendingId, setResendingId] = useState<string | null>(null)
+  const [skip, setSkip] = useState(0)
+  const [hasMore, setHasMore] = useState(true)
+  const [reachedCutoff, setReachedCutoff] = useState(false)
   const supabase = createClient()
 
   function showToast(msg: string) { setToast(msg); setTimeout(() => setToast(""), 3000) }
 
-  const loadData = useCallback(async () => {
-    setLoading(true)
+  const fetchPage = useCallback(async (currentSkip: number, append: boolean) => {
+    if (append) { setLoadingMore(true) } else { setLoading(true) }
     try {
-      let allBgDocs: GHLDocument[] = []
-      let skip = 0
-      let keepGoing = true
+      setLoadingProgress("Fetching documents...")
+      const res = await fetch(`/api/ghl/test?endpoint=/proposals/document?locationId=${LOCATION_ID}%26limit=${PAGE_SIZE}%26skip=${currentSkip}`)
+      const data = await res.json()
+      const docs: GHLDocument[] = data.documents || []
 
-      while (keepGoing) {
-        setLoadingProgress(`Fetching documents... (${allBgDocs.length} found, page ${Math.floor(skip / PAGE_SIZE) + 1})`)
-        const res = await fetch(`/api/ghl/test?endpoint=/proposals/document?locationId=${LOCATION_ID}%26limit=${PAGE_SIZE}%26skip=${skip}`)
-        const data = await res.json()
-        const docs = data.documents || []
-
-        if (docs.length === 0) { keepGoing = false; break }
-
-        for (const doc of docs) {
-          if (doc.name === BG_CHECK_DOC_NAME && doc.status !== "draft") {
-            allBgDocs.push(doc)
-          }
-          if (new Date(doc.createdAt) < new Date(CUTOFF_DATE)) {
-            keepGoing = false
-            break
-          }
-        }
-
-        skip += PAGE_SIZE
-        if (skip > 6000) keepGoing = false
+      if (docs.length === 0) {
+        setHasMore(false)
+        if (!append) setLoading(false)
+        setLoadingMore(false)
+        return
       }
 
-      setLoadingProgress(`Found ${allBgDocs.length} background checks. Loading local data...`)
+      const bgDocs: GHLDocument[] = []
+      let hitCutoff = false
+      for (const doc of docs) {
+        if (doc.name === BG_CHECK_DOC_NAME && doc.status !== "draft") {
+          bgDocs.push(doc)
+        }
+        if (new Date(doc.createdAt) < new Date(CUTOFF_DATE)) {
+          hitCutoff = true
+          break
+        }
+      }
+
+      if (hitCutoff) { setReachedCutoff(true); setHasMore(false) }
+      else if (docs.length < PAGE_SIZE) { setHasMore(false) }
+
+      setLoadingProgress("Loading local data...")
 
       const { data: localRecords } = await supabase.from("background_checks").select("*")
       const localMap = new Map<string, LocalRecord>()
@@ -122,7 +125,7 @@ export default function BackgroundChecksPage() {
         localRecords.forEach((r: LocalRecord) => { localMap.set(r.ghl_document_id, r) })
       }
 
-      const merged: MergedRecord[] = allBgDocs.map(doc => {
+      const newMerged: MergedRecord[] = bgDocs.map(doc => {
         const recipient = doc.recipients[0]
         const local = localMap.get(doc.documentId)
         return {
@@ -141,20 +144,41 @@ export default function BackgroundChecksPage() {
           localId: local?.id || null,
           files: null,
           loadingFiles: false,
-          links: doc.links || [],
         }
       })
 
-      merged.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-      setRecords(merged)
+      if (append) {
+        setRecords(prev => {
+          const existingIds = new Set(prev.map(r => r.documentId))
+          const unique = newMerged.filter(r => !existingIds.has(r.documentId))
+          return [...prev, ...unique]
+        })
+      } else {
+        setRecords(newMerged)
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Unknown error"
       showToast("Error loading data: " + msg)
     }
     setLoading(false)
+    setLoadingMore(false)
   }, [supabase])
 
-  useEffect(() => { loadData() }, [loadData])
+  useEffect(() => { fetchPage(0, false) }, [fetchPage])
+
+  function handleLoadMore() {
+    const nextSkip = skip + PAGE_SIZE
+    setSkip(nextSkip)
+    fetchPage(nextSkip, true)
+  }
+
+  function handleRefresh() {
+    setSkip(0)
+    setHasMore(true)
+    setReachedCutoff(false)
+    setRecords([])
+    fetchPage(0, false)
+  }
 
   async function ensureLocalRecord(rec: MergedRecord): Promise<string> {
     if (rec.localId) return rec.localId
@@ -167,6 +191,7 @@ export default function BackgroundChecksPage() {
       fulfillment_status: "pending",
     }).select().single()
     if (error) { showToast("Error: " + error.message); return "" }
+    setRecords(prev => prev.map(r => r.documentId === rec.documentId ? { ...r, localId: data.id } : r))
     return data.id
   }
 
@@ -176,8 +201,8 @@ export default function BackgroundChecksPage() {
     const updates: Record<string, string> = { hr_status: status }
     if (status === "approved") { updates.approved_at = new Date().toISOString(); updates.approved_by = "Admin" }
     await supabase.from("background_checks").update(updates).eq("id", localId)
+    setRecords(prev => prev.map(r => r.documentId === rec.documentId ? { ...r, hrStatus: status, approvedAt: status === "approved" ? new Date().toISOString() : r.approvedAt } : r))
     showToast(rec.repName + " marked as " + status)
-    loadData()
   }
 
   async function updateFulfillment(rec: MergedRecord, field: string) {
@@ -190,8 +215,12 @@ export default function BackgroundChecksPage() {
     if (field === "badge" && rec.shirtGivenAt) updates.fulfillment_status = "complete"
     if (field === "shirt" && rec.badgePrintedAt) updates.fulfillment_status = "complete"
     await supabase.from("background_checks").update(updates).eq("id", localId)
+    setRecords(prev => prev.map(r => r.documentId === rec.documentId ? {
+      ...r,
+      shirtGivenAt: field === "shirt" ? now : r.shirtGivenAt,
+      badgePrintedAt: field === "badge" ? now : r.badgePrintedAt,
+    } : r))
     showToast("Updated " + rec.repName)
-    loadData()
   }
 
   function extractFileFromCustomField(customFields: Record<string, unknown>[], fieldId: string): FileInfo | undefined {
@@ -228,32 +257,27 @@ export default function BackgroundChecksPage() {
     }
   }
 
-  // === NEW FEATURE 1: Download signed GHL document ===
+  // === FEATURE: Download signed GHL document ===
   function handleDownloadDoc(rec: MergedRecord) {
-    if (rec.links && rec.links.length > 0) {
-      const signed = rec.links.find(l => l.type === "signed" || l.type === "completed" || l.type === "pdf" || (l.url && l.url.includes("pdf")))
-      const url = signed?.url || rec.links[0]?.url
-      if (url) {
-        window.open(url, "_blank", "noopener,noreferrer")
-        showToast("Opening signed document...")
-        return
-      }
-    }
-    showToast("No signed document link available for " + rec.repName)
+    // GHL signed documents can be downloaded via the document URL
+    const url = `https://services.leadconnectorhq.com/proposals/document/${rec.documentId}/download?locationId=${LOCATION_ID}`
+    // Open via our proxy to add auth headers
+    window.open(`/api/ghl/test?endpoint=/proposals/document/${rec.documentId}`, "_blank")
+    showToast("Opening document details for " + rec.repName)
   }
 
-  // === NEW FEATURE 2: Resend contract ===
+  // === FEATURE: Resend contract (uses dedicated POST route) ===
   async function handleResendContract(rec: MergedRecord) {
     if (!confirm("Resend background check contract to " + (rec.repName || rec.repEmail) + "?")) return
     setResendingId(rec.documentId)
     try {
-      const res = await fetch(`/api/ghl/test?endpoint=/proposals/document/send`, {
+      const res = await fetch("/api/ghl/resend-document", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ documentId: rec.documentId, locationId: LOCATION_ID }),
       })
       const data = await res.json()
-      if (res.ok) {
+      if (res.ok && !data.error) {
         showToast("Contract resent to " + rec.repName + "!")
       } else {
         showToast("Resend failed: " + (data.message || data.error || "Unknown error"))
@@ -265,23 +289,26 @@ export default function BackgroundChecksPage() {
     setResendingId(null)
   }
 
-  // === NEW FEATURE 3: Copy signing link ===
+  // === FEATURE: Copy signing link ===
   async function handleCopyLink(rec: MergedRecord) {
-    let link = ""
-    if (rec.links && rec.links.length > 0) {
-      const share = rec.links.find(l => l.type === "share" || l.type === "signing" || l.type === "view" || (l.url && (l.url.includes("proposal") || l.url.includes("sign"))))
-      link = share?.url || rec.links[0]?.url || ""
-    }
-    if (!link) {
-      link = "https://app.gohighlevel.com/proposals/document/view/" + rec.documentId
-    }
+    // GHL document signing links follow this pattern
+    const link = `https://link.windmarsolaracademy.com/widget/proposal/${rec.documentId}`
     try {
       await navigator.clipboard.writeText(link)
       setCopiedId(rec.documentId)
-      showToast("Link copied!")
+      showToast("Signing link copied!")
       setTimeout(() => setCopiedId(null), 2500)
     } catch {
-      showToast("Failed to copy link")
+      // Fallback for HTTP or older browsers
+      const textarea = document.createElement("textarea")
+      textarea.value = link
+      document.body.appendChild(textarea)
+      textarea.select()
+      document.execCommand("copy")
+      document.body.removeChild(textarea)
+      setCopiedId(rec.documentId)
+      showToast("Signing link copied!")
+      setTimeout(() => setCopiedId(null), 2500)
     }
   }
 
@@ -296,7 +323,7 @@ export default function BackgroundChecksPage() {
     denied: { bg: "#fef2f2", color: "#dc2626" },
   }
 
-  // === NEW FEATURE 4: Search filter ===
+  // Search filter
   const searchLower = search.toLowerCase().trim()
   const searchFiltered = searchLower
     ? records.filter(r =>
@@ -314,7 +341,7 @@ export default function BackgroundChecksPage() {
     filter === "done" ? searchFiltered.filter(r => !!(r.shirtGivenAt && r.badgePrintedAt)) :
     searchFiltered
 
-  // Stats always from ALL records (not filtered by search)
+  // Stats always from ALL loaded records
   const stats = {
     total: records.length,
     sent: records.filter(r => r.docStatus === "sent" || r.docStatus === "viewed").length,
@@ -340,7 +367,7 @@ export default function BackgroundChecksPage() {
 
       <h1 style={{ fontSize: 22, fontWeight: 700, color: "#1a2f6e", margin: "0 0 16px" }}>HD Background Checks</h1>
 
-      {/* Stats buttons - always show total counts */}
+      {/* Stats buttons */}
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
         {[
           { label: "Total", value: stats.total, key: "all", color: "#1a2f6e" },
@@ -468,7 +495,7 @@ export default function BackgroundChecksPage() {
                 </div>
               )}
 
-              {/* === NEW: Download signed doc === */}
+              {/* Download signed doc */}
               {rec.docStatus === "completed" && (
                 <button onClick={() => handleDownloadDoc(rec)}
                   style={{ padding: "6px 14px", borderRadius: 8, border: "2px solid #0369a1", background: "white", color: "#0369a1", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>
@@ -476,13 +503,13 @@ export default function BackgroundChecksPage() {
                 </button>
               )}
 
-              {/* === NEW: Copy signing link === */}
+              {/* Copy signing link */}
               <button onClick={() => handleCopyLink(rec)}
-                style={{ padding: "6px 14px", borderRadius: 8, border: "2px solid #6b7280", background: copiedId === rec.documentId ? "#f0fdf4" : "white", color: copiedId === rec.documentId ? "#15803d" : "#6b7280", fontWeight: 600, fontSize: 13, cursor: "pointer", transition: "all .2s" }}>
-                {copiedId === rec.documentId ? "Copied!" : "Copy Link"}
+                style={{ padding: "6px 14px", borderRadius: 8, border: copiedId === rec.documentId ? "2px solid #15803d" : "2px solid #6b7280", background: copiedId === rec.documentId ? "#f0fdf4" : "white", color: copiedId === rec.documentId ? "#15803d" : "#6b7280", fontWeight: 600, fontSize: 13, cursor: "pointer", transition: "all .2s" }}>
+                {copiedId === rec.documentId ? "\u2713 Copied!" : "Copy Link"}
               </button>
 
-              {/* === NEW: Resend contract === */}
+              {/* Resend contract */}
               {(rec.docStatus === "sent" || rec.docStatus === "viewed") && (
                 <button onClick={() => handleResendContract(rec)}
                   disabled={resendingId === rec.documentId}
@@ -513,9 +540,24 @@ export default function BackgroundChecksPage() {
         )
       })}
 
-      <button onClick={loadData} style={{ marginTop: 12, padding: "10px 20px", borderRadius: 8, border: "2px solid #1a2f6e", background: "white", color: "#1a2f6e", fontWeight: 600, cursor: "pointer", width: "100%" }}>
-        Refresh from GHL
-      </button>
+      {/* Load More / Refresh buttons */}
+      <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+        {hasMore && !reachedCutoff && (
+          <button onClick={handleLoadMore} disabled={loadingMore}
+            style={{ flex: 1, padding: "10px 20px", borderRadius: 8, border: "none", background: "#1a2f6e", color: "white", fontWeight: 600, cursor: loadingMore ? "wait" : "pointer", opacity: loadingMore ? 0.7 : 1 }}>
+            {loadingMore ? "Loading more..." : `Load More (showing ${records.length})`}
+          </button>
+        )}
+        {reachedCutoff && (
+          <div style={{ flex: 1, padding: "10px 20px", textAlign: "center", fontSize: 13, color: "#6b7280" }}>
+            All {records.length} contracts since Jan 2025 loaded
+          </div>
+        )}
+        <button onClick={handleRefresh}
+          style={{ padding: "10px 20px", borderRadius: 8, border: "2px solid #1a2f6e", background: "white", color: "#1a2f6e", fontWeight: 600, cursor: "pointer", minWidth: 120 }}>
+          Refresh
+        </button>
+      </div>
     </div>
   )
 }
