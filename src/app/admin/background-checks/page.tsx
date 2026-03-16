@@ -1,5 +1,5 @@
 ﻿'use client'
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useState, useCallback, useRef } from "react"
 import { createClient } from "@/lib/supabase/client"
 
 const BG_CHECK_DOC_NAME = "Windmar- Home Depot Background Check"
@@ -84,6 +84,8 @@ export default function BackgroundChecksPage() {
   const [loadingMore, setLoadingMore] = useState(false)
   const [filter, setFilter] = useState("all")
   const [search, setSearch] = useState("")
+  const [searchResults, setSearchResults] = useState<MergedRecord[] | null>(null)
+  const [searching, setSearching] = useState(false)
   const [toast, setToast] = useState("")
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [resendingId, setResendingId] = useState<string | null>(null)
@@ -91,6 +93,7 @@ export default function BackgroundChecksPage() {
   const [hasMore, setHasMore] = useState(true)
   const [totals, setTotals] = useState<Totals | null>(null)
   const [totalsLoading, setTotalsLoading] = useState(true)
+  const searchTimer = useRef<NodeJS.Timeout | null>(null)
   const supabase = createClient()
 
   function showToast(msg: string) { setToast(msg); setTimeout(() => setToast(""), 3000) }
@@ -100,13 +103,39 @@ export default function BackgroundChecksPage() {
     setTotalsLoading(true)
     try {
       const res = await fetch("/api/ghl/bg-check-totals")
-      if (res.ok) {
-        const data: Totals = await res.json()
-        setTotals(data)
-      }
+      if (res.ok) { setTotals(await res.json()) }
     } catch { /* silent */ }
     setTotalsLoading(false)
   }, [])
+
+  // === Merge GHL docs with Supabase local records ===
+  async function mergeWithLocal(docs: GHLDocument[]): Promise<MergedRecord[]> {
+    const { data: localRecords } = await supabase.from("background_checks").select("*")
+    const localMap = new Map<string, LocalRecord>()
+    if (localRecords) { localRecords.forEach((r: LocalRecord) => { localMap.set(r.ghl_document_id, r) }) }
+
+    return docs.map(doc => {
+      const recipient = doc.recipients[0]
+      const local = localMap.get(doc.documentId)
+      return {
+        documentId: doc.documentId,
+        contactId: recipient?.id || "",
+        repName: recipient?.contactName || "Unknown",
+        repEmail: recipient?.email || "",
+        docStatus: doc.status,
+        createdAt: doc.createdAt,
+        updatedAt: doc.updatedAt,
+        signedDate: recipient?.signedDate || null,
+        hrStatus: local?.hr_status || "pending",
+        approvedAt: local?.approved_at || null,
+        shirtGivenAt: local?.shirt_given_at || null,
+        badgePrintedAt: local?.badge_printed_at || null,
+        localId: local?.id || null,
+        files: null,
+        loadingFiles: false,
+      }
+    })
+  }
 
   // === Load one page of documents for the list ===
   const fetchPage = useCallback(async (currentSkip: number, append: boolean) => {
@@ -121,41 +150,13 @@ export default function BackgroundChecksPage() {
       const bgDocs: GHLDocument[] = []
       let hitCutoff = false
       for (const doc of docs) {
-        if (doc.name === BG_CHECK_DOC_NAME && doc.status !== "draft") {
-          bgDocs.push(doc)
-        }
+        if (doc.name === BG_CHECK_DOC_NAME && doc.status !== "draft") { bgDocs.push(doc) }
         if (new Date(doc.createdAt) < new Date(CUTOFF_DATE)) { hitCutoff = true; break }
       }
 
       if (hitCutoff || docs.length < PAGE_SIZE) setHasMore(false)
 
-      const { data: localRecords } = await supabase.from("background_checks").select("*")
-      const localMap = new Map<string, LocalRecord>()
-      if (localRecords) {
-        localRecords.forEach((r: LocalRecord) => { localMap.set(r.ghl_document_id, r) })
-      }
-
-      const newMerged: MergedRecord[] = bgDocs.map(doc => {
-        const recipient = doc.recipients[0]
-        const local = localMap.get(doc.documentId)
-        return {
-          documentId: doc.documentId,
-          contactId: recipient?.id || "",
-          repName: recipient?.contactName || "Unknown",
-          repEmail: recipient?.email || "",
-          docStatus: doc.status,
-          createdAt: doc.createdAt,
-          updatedAt: doc.updatedAt,
-          signedDate: recipient?.signedDate || null,
-          hrStatus: local?.hr_status || "pending",
-          approvedAt: local?.approved_at || null,
-          shirtGivenAt: local?.shirt_given_at || null,
-          badgePrintedAt: local?.badge_printed_at || null,
-          localId: local?.id || null,
-          files: null,
-          loadingFiles: false,
-        }
-      })
+      const newMerged = await mergeWithLocal(bgDocs)
 
       if (append) {
         setRecords(prev => {
@@ -166,17 +167,73 @@ export default function BackgroundChecksPage() {
         setRecords(newMerged)
       }
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Unknown error"
-      showToast("Error: " + msg)
+      showToast("Error: " + (err instanceof Error ? err.message : "Unknown"))
     }
     setLoading(false)
     setLoadingMore(false)
   }, [supabase])
 
+  useEffect(() => { loadTotals(); fetchPage(0, false) }, [loadTotals, fetchPage])
+
+  // === Search GHL API with debounce ===
   useEffect(() => {
-    loadTotals()
-    fetchPage(0, false)
-  }, [loadTotals, fetchPage])
+    if (searchTimer.current) clearTimeout(searchTimer.current)
+
+    const q = search.trim()
+    if (!q) {
+      setSearchResults(null)
+      setSearching(false)
+      return
+    }
+
+    // First filter locally loaded records instantly
+    const lower = q.toLowerCase()
+    const localMatches = records.filter(r =>
+      r.repName.toLowerCase().includes(lower) ||
+      r.repEmail.toLowerCase().includes(lower)
+    )
+    // Show local matches immediately while we search GHL
+    if (localMatches.length > 0) {
+      setSearchResults(localMatches)
+    }
+
+    // Debounce the GHL API search
+    searchTimer.current = setTimeout(async () => {
+      setSearching(true)
+      try {
+        // Search GHL with query param - searches across all docs in location
+        const res = await fetch(`/api/ghl/test?endpoint=/proposals/document?locationId=${LOCATION_ID}%26limit=${PAGE_SIZE}%26query=${encodeURIComponent(q)}`)
+        const data = await res.json()
+        const docs: GHLDocument[] = data.documents || []
+
+        // Filter to background check docs only
+        const bgDocs = docs.filter(d => d.name === BG_CHECK_DOC_NAME && d.status !== "draft")
+
+        if (bgDocs.length > 0) {
+          const merged = await mergeWithLocal(bgDocs)
+          // Combine with local matches, deduplicate
+          const allIds = new Set<string>()
+          const combined: MergedRecord[] = []
+          for (const r of [...localMatches, ...merged]) {
+            if (!allIds.has(r.documentId)) {
+              allIds.add(r.documentId)
+              combined.push(r)
+            }
+          }
+          combined.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+          setSearchResults(combined)
+        } else if (localMatches.length === 0) {
+          setSearchResults([])
+        }
+      } catch {
+        // Keep local matches if API fails
+        if (localMatches.length === 0) setSearchResults([])
+      }
+      setSearching(false)
+    }, 500)
+
+    return () => { if (searchTimer.current) clearTimeout(searchTimer.current) }
+  }, [search, records, supabase])
 
   function handleLoadMore() {
     const next = skip + PAGE_SIZE
@@ -185,7 +242,7 @@ export default function BackgroundChecksPage() {
   }
 
   function handleRefresh() {
-    setSkip(0); setHasMore(true); setRecords([])
+    setSkip(0); setHasMore(true); setRecords([]); setSearch(""); setSearchResults(null)
     loadTotals()
     fetchPage(0, false)
   }
@@ -201,7 +258,9 @@ export default function BackgroundChecksPage() {
       fulfillment_status: "pending",
     }).select().single()
     if (error) { showToast("Error: " + error.message); return "" }
-    setRecords(prev => prev.map(r => r.documentId === rec.documentId ? { ...r, localId: data.id } : r))
+    const updateRec = (prev: MergedRecord[]) => prev.map(r => r.documentId === rec.documentId ? { ...r, localId: data.id } : r)
+    setRecords(updateRec)
+    if (searchResults) setSearchResults(updateRec)
     return data.id
   }
 
@@ -211,7 +270,9 @@ export default function BackgroundChecksPage() {
     const updates: Record<string, string> = { hr_status: status }
     if (status === "approved") { updates.approved_at = new Date().toISOString(); updates.approved_by = "Admin" }
     await supabase.from("background_checks").update(updates).eq("id", localId)
-    setRecords(prev => prev.map(r => r.documentId === rec.documentId ? { ...r, hrStatus: status, approvedAt: status === "approved" ? new Date().toISOString() : r.approvedAt } : r))
+    const updater = (prev: MergedRecord[]) => prev.map(r => r.documentId === rec.documentId ? { ...r, hrStatus: status, approvedAt: status === "approved" ? new Date().toISOString() : r.approvedAt } : r)
+    setRecords(updater)
+    if (searchResults) setSearchResults(updater)
     showToast(rec.repName + " marked as " + status)
   }
 
@@ -225,11 +286,9 @@ export default function BackgroundChecksPage() {
     if (field === "badge" && rec.shirtGivenAt) updates.fulfillment_status = "complete"
     if (field === "shirt" && rec.badgePrintedAt) updates.fulfillment_status = "complete"
     await supabase.from("background_checks").update(updates).eq("id", localId)
-    setRecords(prev => prev.map(r => r.documentId === rec.documentId ? {
-      ...r,
-      shirtGivenAt: field === "shirt" ? now : r.shirtGivenAt,
-      badgePrintedAt: field === "badge" ? now : r.badgePrintedAt,
-    } : r))
+    const updater = (prev: MergedRecord[]) => prev.map(r => r.documentId === rec.documentId ? { ...r, shirtGivenAt: field === "shirt" ? now : r.shirtGivenAt, badgePrintedAt: field === "badge" ? now : r.badgePrintedAt } : r)
+    setRecords(updater)
+    if (searchResults) setSearchResults(updater)
     showToast("Updated " + rec.repName)
   }
 
@@ -247,7 +306,9 @@ export default function BackgroundChecksPage() {
 
   async function loadContactFiles(rec: MergedRecord) {
     if (!rec.contactId) return
-    setRecords(prev => prev.map(r => r.documentId === rec.documentId ? { ...r, loadingFiles: true } : r))
+    const setLoading = (prev: MergedRecord[]) => prev.map(r => r.documentId === rec.documentId ? { ...r, loadingFiles: true } : r)
+    setRecords(setLoading)
+    if (searchResults) setSearchResults(setLoading)
     try {
       const res = await fetch(`/api/ghl/test?endpoint=/contacts/${rec.contactId}`)
       const data = await res.json()
@@ -258,9 +319,13 @@ export default function BackgroundChecksPage() {
         id: extractFileFromCustomField(contact.customFields, ID_FIELD_ID),
         ssn: extractFileFromCustomField(contact.customFields, SSN_FIELD_ID),
       }
-      setRecords(prev => prev.map(r => r.documentId === rec.documentId ? { ...r, files, loadingFiles: false } : r))
+      const setFiles = (prev: MergedRecord[]) => prev.map(r => r.documentId === rec.documentId ? { ...r, files, loadingFiles: false } : r)
+      setRecords(setFiles)
+      if (searchResults) setSearchResults(setFiles)
     } catch {
-      setRecords(prev => prev.map(r => r.documentId === rec.documentId ? { ...r, files: {}, loadingFiles: false } : r))
+      const setEmpty = (prev: MergedRecord[]) => prev.map(r => r.documentId === rec.documentId ? { ...r, files: {}, loadingFiles: false } : r)
+      setRecords(setEmpty)
+      if (searchResults) setSearchResults(setEmpty)
       showToast("Could not load files for " + rec.repName)
     }
   }
@@ -280,29 +345,20 @@ export default function BackgroundChecksPage() {
         body: JSON.stringify({ documentId: rec.documentId, locationId: LOCATION_ID }),
       })
       const data = await res.json()
-      if (res.ok && !data.error) {
-        showToast("Contract resent to " + rec.repName + "!")
-      } else {
-        showToast("Resend failed: " + (data.message || data.error || "Unknown error"))
-      }
+      if (res.ok && !data.error) { showToast("Contract resent to " + rec.repName + "!") }
+      else { showToast("Resend failed: " + (data.message || data.error || "Unknown error")) }
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Unknown error"
-      showToast("Resend failed: " + msg)
+      showToast("Resend failed: " + (err instanceof Error ? err.message : "Unknown"))
     }
     setResendingId(null)
   }
 
   async function handleCopyLink(rec: MergedRecord) {
     const link = `https://link.windmarsolaracademy.com/widget/proposal/${rec.documentId}`
-    try {
-      await navigator.clipboard.writeText(link)
-    } catch {
-      const ta = document.createElement("textarea")
-      ta.value = link; document.body.appendChild(ta); ta.select(); document.execCommand("copy"); document.body.removeChild(ta)
+    try { await navigator.clipboard.writeText(link) } catch {
+      const ta = document.createElement("textarea"); ta.value = link; document.body.appendChild(ta); ta.select(); document.execCommand("copy"); document.body.removeChild(ta)
     }
-    setCopiedId(rec.documentId)
-    showToast("Signing link copied!")
-    setTimeout(() => setCopiedId(null), 2500)
+    setCopiedId(rec.documentId); showToast("Signing link copied!"); setTimeout(() => setCopiedId(null), 2500)
   }
 
   const docColor: Record<string, { bg: string; color: string }> = {
@@ -316,23 +372,20 @@ export default function BackgroundChecksPage() {
     denied: { bg: "#fef2f2", color: "#dc2626" },
   }
 
-  const searchLower = search.toLowerCase().trim()
-  const searchFiltered = searchLower
-    ? records.filter(r => r.repName.toLowerCase().includes(searchLower) || r.repEmail.toLowerCase().includes(searchLower) || r.docStatus.toLowerCase().includes(searchLower) || r.hrStatus.toLowerCase().includes(searchLower))
-    : records
+  // Use search results when searching, otherwise filter loaded records
+  const activeRecords = searchResults !== null ? searchResults : records
 
-  const filtered = filter === "all" ? searchFiltered :
-    filter === "sent" ? searchFiltered.filter(r => r.docStatus === "sent" || r.docStatus === "viewed") :
-    filter === "completed" ? searchFiltered.filter(r => r.docStatus === "completed" && r.hrStatus !== "approved") :
-    filter === "approved" ? searchFiltered.filter(r => r.hrStatus === "approved" && !(r.shirtGivenAt && r.badgePrintedAt)) :
-    filter === "done" ? searchFiltered.filter(r => !!(r.shirtGivenAt && r.badgePrintedAt)) :
-    searchFiltered
+  const filtered = filter === "all" ? activeRecords :
+    filter === "sent" ? activeRecords.filter(r => r.docStatus === "sent" || r.docStatus === "viewed") :
+    filter === "completed" ? activeRecords.filter(r => r.docStatus === "completed" && r.hrStatus !== "approved") :
+    filter === "approved" ? activeRecords.filter(r => r.hrStatus === "approved" && !(r.shirtGivenAt && r.badgePrintedAt)) :
+    filter === "done" ? activeRecords.filter(r => !!(r.shirtGivenAt && r.badgePrintedAt)) :
+    activeRecords
 
   const fmt = (iso: string) => {
     try { return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) } catch { return "-" }
   }
 
-  // Totals: use API totals (real count), fall back to loaded count
   const displayTotals = {
     total: totals?.total ?? records.length,
     sent: totals ? (totals.sent + totals.viewed) : records.filter(r => r.docStatus === "sent" || r.docStatus === "viewed").length,
@@ -375,17 +428,21 @@ export default function BackgroundChecksPage() {
         ))}
       </div>
 
+      {/* Search bar - searches GHL API */}
       <div style={{ marginBottom: 16, position: "relative" }}>
-        <input type="text" placeholder="Search by name, email, or status..." value={search} onChange={(e) => setSearch(e.target.value)}
-          style={{ width: "100%", padding: "10px 14px", paddingRight: search ? 36 : 14, border: "2px solid #e5e7eb", borderRadius: 10, fontSize: 14, outline: "none", boxSizing: "border-box" }}
+        <input type="text" placeholder="Search contacts across all contracts..." value={search} onChange={(e) => setSearch(e.target.value)}
+          style={{ width: "100%", padding: "10px 14px", paddingRight: search ? 60 : 14, border: "2px solid #e5e7eb", borderRadius: 10, fontSize: 14, outline: "none", boxSizing: "border-box" }}
           onFocus={(e) => { e.currentTarget.style.borderColor = "#1a2f6e" }}
           onBlur={(e) => { e.currentTarget.style.borderColor = "#e5e7eb" }}
         />
+        {searching && <span style={{ position: "absolute", right: search ? 36 : 10, top: "50%", transform: "translateY(-50%)", fontSize: 12, color: "#6b7280" }}>Searching...</span>}
         {search && <button onClick={() => setSearch("")} style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "#9ca3af" }}>{"\u00D7"}</button>}
       </div>
 
       {filtered.length === 0 ? (
-        <div style={{ textAlign: "center", color: "#9ca3af", padding: 40, fontSize: 15 }}>{search ? `No results for "${search}"` : "No records in this category"}</div>
+        <div style={{ textAlign: "center", color: "#9ca3af", padding: 40, fontSize: 15 }}>
+          {searching ? "Searching GHL..." : search ? `No contracts found for "${search}"` : "No records in this category"}
+        </div>
       ) : filtered.map(rec => {
         const dc = docColor[rec.docStatus] || docColor.sent
         const hc = hrColor[rec.hrStatus] || hrColor.pending
@@ -452,16 +509,19 @@ export default function BackgroundChecksPage() {
         )
       })}
 
-      <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-        {hasMore && (
-          <button onClick={handleLoadMore} disabled={loadingMore}
-            style={{ flex: 1, padding: "10px 20px", borderRadius: 8, border: "none", background: "#1a2f6e", color: "white", fontWeight: 600, cursor: loadingMore ? "wait" : "pointer", opacity: loadingMore ? 0.7 : 1 }}>
-            {loadingMore ? "Loading more..." : `Load More (showing ${records.length})`}
-          </button>
-        )}
-        {!hasMore && <div style={{ flex: 1, padding: "10px", textAlign: "center", fontSize: 13, color: "#6b7280" }}>Showing all {records.length} loaded contracts</div>}
-        <button onClick={handleRefresh} style={{ padding: "10px 20px", borderRadius: 8, border: "2px solid #1a2f6e", background: "white", color: "#1a2f6e", fontWeight: 600, cursor: "pointer", minWidth: 120 }}>Refresh</button>
-      </div>
+      {/* Load More / Refresh - only show when not searching */}
+      {!search && (
+        <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+          {hasMore && (
+            <button onClick={handleLoadMore} disabled={loadingMore}
+              style={{ flex: 1, padding: "10px 20px", borderRadius: 8, border: "none", background: "#1a2f6e", color: "white", fontWeight: 600, cursor: loadingMore ? "wait" : "pointer", opacity: loadingMore ? 0.7 : 1 }}>
+              {loadingMore ? "Loading more..." : `Load More (showing ${records.length})`}
+            </button>
+          )}
+          {!hasMore && <div style={{ flex: 1, padding: "10px", textAlign: "center", fontSize: 13, color: "#6b7280" }}>Showing all {records.length} loaded</div>}
+          <button onClick={handleRefresh} style={{ padding: "10px 20px", borderRadius: 8, border: "2px solid #1a2f6e", background: "white", color: "#1a2f6e", fontWeight: 600, cursor: "pointer", minWidth: 120 }}>Refresh</button>
+        </div>
+      )}
     </div>
   )
 }
