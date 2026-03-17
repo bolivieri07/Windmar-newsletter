@@ -297,3 +297,122 @@ body {
 
 /* ADMIN - full width */
 .admin-body { max-width: 100%; }
+
+/* === X (TWITTER) STYLE FEED === */
+.x-feed { max-width: 680px; margin: 0 auto; }
+.x-feed-header {
+  padding: 1rem 0 0.75rem;
+  position: sticky; top: 64px; background: rgba(249,250,251,0.85);
+  backdrop-filter: blur(12px); z-index: 10;
+}
+.x-feed-title {
+  font-size: 1.25rem; font-weight: 800; color: var(--gray-800);
+}
+.x-feed-subtitle {
+  font-size: 0.82rem; color: var(--gray-400); margin-top: 0.1rem;
+}
+.x-filter-bar {
+  display: flex; border-bottom: 1px solid var(--gray-200);
+  margin-bottom: 0;
+}
+.x-filter-btn {
+  flex: 1; padding: 0.85rem 0.5rem;
+  font-size: 0.88rem; font-weight: 600;
+  color: var(--gray-400); background: none; border: none;
+  cursor: pointer; position: relative;
+  font-family: "Barlow", sans-serif;
+  transition: color 0.15s, background 0.15s;
+}
+.x-filter-btn:hover { background: rgba(0,0,0,0.03); }
+.x-filter-btn.active { color: var(--gray-800); font-weight: 700; }
+.x-filter-btn.active::after {
+  content: ""; position: absolute;
+  bottom: 0; left: 50%; transform: translateX(-50%);
+  width: 56px; height: 3px; border-radius: 3px;
+  background: var(--orange);
+}
+
+.x-post {
+  display: flex; gap: 0.75rem; padding: 1rem;
+  border-bottom: 1px solid var(--gray-200);
+  cursor: pointer; transition: background 0.12s;
+}
+.x-post:hover { background: rgba(0,0,0,0.015); }
+
+.x-avatar {
+  width: 42px; height: 42px; border-radius: 50%; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 800; color: white; font-size: 0.82rem;
+}
+.x-post-content { flex: 1; min-width: 0; }
+.x-post-header {
+  display: flex; align-items: center; gap: 0.4rem;
+  flex-wrap: wrap; margin-bottom: 0.2rem;
+}
+.x-author { font-weight: 700; font-size: 0.95rem; color: var(--gray-800); }
+.x-handle { font-size: 0.85rem; color: var(--gray-400); }
+.x-dot { color: var(--gray-400); font-size: 0.75rem; }
+.x-time { font-size: 0.85rem; color: var(--gray-400); }
+.x-category {
+  padding: 0.15rem 0.5rem; border-radius: 4px;
+  font-size: 0.7rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.02em;
+}
+
+.x-post-title {
+  font-weight: 700; font-size: 1rem; color: var(--gray-800);
+  margin-bottom: 0.25rem; line-height: 1.35;
+}
+.x-post-text {
+  font-size: 0.92rem; color: var(--gray-600); line-height: 1.55;
+}
+.x-read-more {
+  background: none; border: none; color: var(--orange);
+  font-weight: 700; font-size: 0.88rem; cursor: pointer;
+  padding: 0.3rem 0; font-family: "Barlow", sans-serif;
+}
+.x-post-media {
+  margin-top: 0.75rem; border-radius: 14px; overflow: hidden;
+  border: 1px solid var(--gray-200);
+}
+.x-post-media img {
+  width: 100%; display: block; max-height: 320px; object-fit: cover;
+}
+.x-post-media video {
+  width: 100%; display: block; max-height: 320px; background: #000;
+}
+.x-post-media .x-embed {
+  width: 100%; position: relative; padding-bottom: 56.25%; background: #000;
+}
+.x-post-media .x-embed iframe {
+  position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: none;
+}
+
+.x-actions {
+  display: flex; align-items: center; gap: 0;
+  margin-top: 0.6rem; margin-left: -0.5rem;
+}
+.x-action-btn {
+  display: flex; align-items: center; gap: 0.35rem;
+  padding: 0.4rem 0.75rem; border-radius: 50px;
+  font-size: 0.82rem; font-weight: 600;
+  color: var(--gray-400); background: none; border: none;
+  cursor: pointer; transition: all 0.15s;
+  font-family: "Barlow", sans-serif;
+}
+.x-action-btn:hover { background: rgba(0,0,0,0.04); }
+.x-action-btn svg { width: 18px; height: 18px; }
+.x-action-btn.liked { color: #f91880; }
+.x-action-btn.liked:hover { background: rgba(249,24,128,0.08); }
+.x-action-rsvp { color: var(--orange); }
+.x-action-rsvp:hover { background: rgba(248,155,36,0.08); }
+
+.x-empty {
+  padding: 3rem 1.5rem; text-align: center;
+  color: var(--gray-400); font-size: 0.95rem;
+}
+
+@media (min-width: 768px) {
+  .x-feed { border-left: 1px solid var(--gray-200); border-right: 1px solid var(--gray-200); }
+  .x-feed-header { top: 64px; }
+}

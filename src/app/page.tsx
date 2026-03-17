@@ -162,8 +162,72 @@ export default function Home() {
     const embedUrl = post.video_url ? getEmbedUrl(post.video_url) : null
     const directVideo = post.video_url ? isDirectVideo(post.video_url) : false
     const hasBody = post.body && post.body.trim().length > 0 && post.body !== post.excerpt
+    const catColor = getBadgeClass(post.post_type)
+    const catBg: Record<string,string> = {"badge-announcement":"#e8edf8","badge-update":"#f0f9ff","badge-event":"#fdf4ff","badge-giveaway":"#fef2f2","badge-training":"#f0fdf4"}
+    const catFg: Record<string,string> = {"badge-announcement":"#1a2f6e","badge-update":"#0369a1","badge-event":"#7e22ce","badge-giveaway":"#b91c1c","badge-training":"#15803d"}
 
     return (
+      <div className="x-post">
+        <div className="x-avatar" style={{background:getAvatarColor(post.post_type)}}>{getInitials(post.post_type)}</div>
+        <div className="x-post-content">
+          <div className="x-post-header">
+            <span className="x-author">Windmar Academy</span>
+            <span className="x-handle">@solaracademy</span>
+            <span className="x-dot">{"\u00B7"}</span>
+            <span className="x-time">{formatDate(post.published_at)}</span>
+            <span className="x-category" style={{background:catBg[catColor]||"#f3f4f6",color:catFg[catColor]||"#6b7280",marginLeft:"auto"}}>{post.categories?.name || post.post_type}</span>
+          </div>
+          <div className="x-post-title">{post.title}</div>
+          <div className="x-post-text">{post.excerpt}</div>
+          {hasBody && (
+            <>
+              {expanded && <div className="x-post-text" style={{marginTop:"0.5rem",whiteSpace:"pre-wrap"}}>{post.body}</div>}
+              <button className="x-read-more" onClick={() => setExpanded(!expanded)}>{expanded ? "Show less" : "Show more"}</button>
+            </>
+          )}
+          {(post.cover_image_url || embedUrl || directVideo) && (
+            <div className="x-post-media">
+              {post.cover_image_url && !embedUrl && !directVideo && (
+                <img src={post.cover_image_url} alt={post.title} onError={(e: any) => { e.target.style.display="none" }} />
+              )}
+              {embedUrl && (
+                <div className="x-embed"><iframe src={embedUrl} allowFullScreen /></div>
+              )}
+              {directVideo && post.video_url && !embedUrl && (
+                <video src={post.video_url} controls />
+              )}
+            </div>
+          )}
+          <div className="x-actions">
+            <button className={"x-action-btn" + (likedPosts.has(post.id) ? " liked" : "")} onClick={() => toggleLike(post.id)}>
+              <svg viewBox="0 0 24 24" fill={likedPosts.has(post.id)?"currentColor":"none"} stroke="currentColor" strokeWidth="2">
+                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+              </svg>
+              {likedPosts.has(post.id) ? "Liked" : "Like"}
+            </button>
+            <button className="x-action-btn" onClick={() => showToast("Share coming soon!")}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/>
+              </svg>
+              Share
+            </button>
+            {post.post_type === "event" && (() => {
+              const matchedEvent = events.find(e => e.posts?.title === post.title)
+              return matchedEvent && matchedEvent.is_rsvp_open ? (
+                <button className="x-action-btn x-action-rsvp" onClick={() => { setRsvpEvent(matchedEvent); setRsvpModal(true) }}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/>
+                  </svg>
+                  RSVP
+                </button>
+              ) : null
+            })()}
+          </div>
+        </div>
+      </div>
+    )
+  }
+  return (
       <div className="feed-card">
         {post.cover_image_url && (
           <img src={post.cover_image_url} alt={post.title}
@@ -463,31 +527,27 @@ export default function Home() {
         )}
 
         {activeTab === "feed" && (
-          <div style={{maxWidth:900,margin:"0 auto"}}>
-            <div style={{marginBottom:"1.25rem"}}>
-              <h1 style={{color:"#1a2f6e",fontSize:"1.75rem",fontWeight:800,margin:"0 0 0.25rem 0"}}>News Feed</h1>
-              <p style={{color:"#6b7280",fontSize:"0.9rem",margin:0}}>Latest updates from Windmar Solar Academy</p>
+          <div className="x-feed">
+            <div className="x-feed-header">
+              <div className="x-feed-title">Feed</div>
             </div>
-            <div className="filter-tabs">
+            <div className="x-filter-bar">
               {["all","announcement","daily","weekly","event","giveaway","training"].map(f => (
-                <button key={f} className={"filter-tab " + (feedFilter===f?"active":"")} onClick={() => setFeedFilter(f)}>
-                  {f==="all"?"All":f.charAt(0).toUpperCase()+f.slice(1)}
+                <button key={f} className={"x-filter-btn " + (feedFilter===f?"active":"")} onClick={() => setFeedFilter(f)}>
+                  {f==="all"?"For you":f.charAt(0).toUpperCase()+f.slice(1)}
                 </button>
               ))}
             </div>
             {loading ? (
-              <div className="loading-card">Loading feed...</div>
+              <div className="x-empty">Loading feed...</div>
             ) : filteredPosts.length === 0 ? (
-              <div className="loading-card">No posts in this category yet.</div>
+              <div className="x-empty">No posts in this category yet.</div>
             ) : (
-              <div className="feed-grid">
-                {filteredPosts.map(post => <FeedCard key={post.id} post={post} />)}
-              </div>
+              filteredPosts.map(post => <FeedCard key={post.id} post={post} />)
             )}
           </div>
         )}
-
-        {activeTab === "spiffs" && (
+{activeTab === "spiffs" && (
           <div style={{maxWidth:1000,margin:"0 auto"}}>
             <div style={{background:"linear-gradient(135deg,#7c3f00 0%,#d4811a 100%)",borderRadius:16,padding:"2rem",marginBottom:"1.5rem",color:"white",position:"relative",overflow:"hidden"}}>
               <div style={{position:"absolute",right:-20,top:-20,width:200,height:200,borderRadius:"50%",background:"rgba(255,255,255,0.05)"}} />
@@ -725,6 +785,7 @@ export default function Home() {
     </div>
   )
 }
+
 
 
 
