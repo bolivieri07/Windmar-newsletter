@@ -228,69 +228,6 @@ export default function Home() {
     )
   }
   return (
-      <div className="feed-card">
-        {post.cover_image_url && (
-          <img src={post.cover_image_url} alt={post.title}
-            style={{width:"100%",maxHeight:260,objectFit:"cover",display:"block"}}
-            onError={(e: any) => { console.error("Image failed:", post.cover_image_url); e.target.style.display="none" }} />
-        )}
-        {embedUrl && (
-          <div style={{width:"100%",position:"relative",paddingBottom:"56.25%",background:"#000"}}>
-            <iframe src={embedUrl} style={{position:"absolute",top:0,left:0,width:"100%",height:"100%",border:"none"}} allowFullScreen />
-          </div>
-        )}
-        {directVideo && post.video_url && !embedUrl && (
-          <video src={post.video_url} controls style={{width:"100%",maxHeight:300,display:"block",background:"#000"}} />
-        )}
-        <div className="feed-card-header">
-          <div className="feed-author-avatar" style={{background:getAvatarColor(post.post_type)}}>{getInitials(post.post_type)}</div>
-          <div>
-            <div className="feed-author-name">Windmar Academy</div>
-            <div className="feed-post-time">{formatDate(post.published_at)}</div>
-          </div>
-          <span className={"feed-badge " + getBadgeClass(post.post_type)}>{post.categories?.name || post.post_type}</span>
-        </div>
-        <div className="feed-body">
-          <div className="feed-title">{post.title}</div>
-          <div className="feed-text">{post.excerpt}</div>
-          {hasBody && (
-            <>
-              {expanded && (
-                <div className="feed-text" style={{marginTop:"0.75rem",whiteSpace:"pre-wrap"}}>{post.body}</div>
-              )}
-              <button onClick={() => setExpanded(!expanded)}
-                style={{background:"none",border:"none",color:"#f89b24",fontWeight:700,fontSize:"0.85rem",cursor:"pointer",
-                  padding:"0.4rem 0",marginTop:"0.4rem",fontFamily:"Barlow,system-ui,sans-serif"}}>
-                {expanded ? "Show Less" : "Read More"}
-              </button>
-            </>
-          )}
-        </div>
-        <div className="feed-footer">
-          <button className={"feed-action " + (likedPosts.has(post.id) ? "liked" : "")} onClick={() => toggleLike(post.id)}>
-            <svg viewBox="0 0 24 24" fill={likedPosts.has(post.id)?"currentColor":"none"} stroke="currentColor" strokeWidth="2">
-              <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
-            </svg>
-            Like
-          </button>
-          {post.post_type === "event" && (() => {
-            const matchedEvent = events.find(e => e.posts?.title === post.title)
-            return matchedEvent && matchedEvent.is_rsvp_open ? (
-              <button onClick={() => { setRsvpEvent(matchedEvent); setRsvpModal(true) }}
-                style={{display:"flex",alignItems:"center",gap:"0.35rem",fontSize:"0.82rem",color:"#f89b24",cursor:"pointer",border:"none",background:"none",fontFamily:"Barlow,system-ui,sans-serif",fontWeight:700}}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{width:18,height:18}}>
-                  <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/>
-                </svg>
-                RSVP
-              </button>
-            ) : null
-          })()}
-        </div>
-      </div>
-    )
-  }
-
-  return (
     <div style={{minHeight:"100vh",background:"#f9fafb",fontFamily:"Barlow,system-ui,sans-serif"}}>
 
       <style>{`
@@ -785,6 +722,7 @@ export default function Home() {
     </div>
   )
 }
+
 
 
 
