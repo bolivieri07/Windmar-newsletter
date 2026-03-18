@@ -1,6 +1,5 @@
 ﻿"use client"
 import LeadUploadForm from "@/components/LeadUploadForm"
-import LeadUploadForm from "@/components/LeadUploadForm"
 import { useEffect, useState } from "react"
 import { createClient } from "@/lib/supabase/client"
 
@@ -758,6 +757,7 @@ export default function Home() {
     </div>
   )
 }
+
 
 
 
