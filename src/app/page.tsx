@@ -1,5 +1,6 @@
 ﻿"use client"
 import LeadUploadForm from "@/components/LeadUploadForm"
+import LeadUploadForm from "@/components/LeadUploadForm"
 import { useEffect, useState } from "react"
 import { createClient } from "@/lib/supabase/client"
 
@@ -330,6 +331,17 @@ export default function Home() {
             </svg>
             D2D Canvassing
           </a>
+          <button onClick={() => { setActiveTab("leads"); setMobileMenuOpen(false) }}
+            style={{display:"flex",alignItems:"center",gap:"0.75rem",padding:"0.9rem 1.25rem",width:"100%",
+              background:activeTab==="leads"?"rgba(248,155,36,0.15)":"transparent",
+              color:activeTab==="leads"?"white":"rgba(255,255,255,0.6)",
+              border:"none",cursor:"pointer",fontSize:"0.95rem",fontWeight:700,fontFamily:"Barlow,system-ui,sans-serif",
+              borderRight:activeTab==="leads"?"3px solid #f89b24":"3px solid transparent",transition:"all 0.15s"}}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={activeTab==="leads"?"#f89b24":"rgba(255,255,255,0.4)"} strokeWidth="2">
+              <path d="M12 5v14M5 12h14"/>
+            </svg>
+            Lead Upload
+          </button>
           <div style={{height:1,background:"rgba(255,255,255,0.08)",margin:"0.75rem 1.25rem"}} />
           <a href="/login"
             style={{display:"flex",alignItems:"center",gap:"0.75rem",padding:"0.9rem 1.25rem",width:"100%",
@@ -634,6 +646,16 @@ export default function Home() {
           </div>
         )}
 
+        {activeTab === "leads" && (
+          <div style={{maxWidth:720,margin:"0 auto"}}>
+            <div style={{background:"linear-gradient(135deg,#0f1d47 0%,#1a2f6e 100%)",borderRadius:16,padding:"2rem",marginBottom:"1.5rem",color:"white"}}>
+              <h1 style={{fontSize:"2rem",fontWeight:800,margin:"0 0 0.5rem 0"}}>Lead Upload</h1>
+              <p style={{opacity:0.85,margin:0,fontSize:"1rem"}}>Submit a new lead directly to GoHighLevel.</p>
+            </div>
+            <LeadUploadForm />
+          </div>
+        )}
+
         {activeTab === "resources" && (
           <div style={{maxWidth:900,margin:"0 auto"}}>
             <div style={{marginBottom:"1.25rem"}}>
@@ -736,6 +758,9 @@ export default function Home() {
     </div>
   )
 }
+
+
+
 
 
 
