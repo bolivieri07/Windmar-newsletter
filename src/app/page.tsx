@@ -1,4 +1,5 @@
 ﻿"use client"
+import LeadUploadForm from "@/components/LeadUploadForm"
 import { useEffect, useState } from "react"
 import { createClient } from "@/lib/supabase/client"
 
@@ -54,11 +55,14 @@ const bottomTabs = [
   {id:"spiffs", label:"Spiffs", d:"M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"},
   {id:"videos", label:"Videos", d:"M23 7l-7 5 7 5V7z M1 5h15a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H1z"},
   {id:"calendar", label:"Events", d:"M3 4h18a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z M16 2v4M8 2v4M1 10h22"},
+  {id:"leads", label:"Submit Lead", d:"M12 5v14M5 12h14"},
 ]
 
 const desktopTabs = [
   ...bottomTabs,
   {id:"resources", label:"Docs", d:"M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"},
+  {id:"leads", label:"Submit Lead", d:"M12 5v14M5 12h14"},
+  {id:"leads", label:"Submit Lead", d:"M12 5v14M5 12h14"},
 ]
 
 export default function Home() {
@@ -620,6 +624,16 @@ export default function Home() {
           </div>
         )}
 
+        {activeTab === "leads" && (
+          <div style={{maxWidth:720,margin:"0 auto"}}>
+            <div style={{background:"linear-gradient(135deg,#0f1d47 0%,#1a2f6e 100%)",borderRadius:16,padding:"2rem",marginBottom:"1.5rem",color:"white"}}>
+              <h1 style={{fontSize:"2rem",fontWeight:800,margin:"0 0 0.5rem 0"}}>Submit a Lead</h1>
+              <p style={{opacity:0.85,margin:0,fontSize:"1rem"}}>Fill out the form below to submit a new lead to GoHighLevel.</p>
+            </div>
+            <LeadUploadForm />
+          </div>
+        )}
+
         {activeTab === "resources" && (
           <div style={{maxWidth:900,margin:"0 auto"}}>
             <div style={{marginBottom:"1.25rem"}}>
@@ -722,6 +736,11 @@ export default function Home() {
     </div>
   )
 }
+
+
+
+
+
 
 
 
