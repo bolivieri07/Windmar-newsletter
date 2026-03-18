@@ -62,7 +62,6 @@ const desktopTabs = [
   ...bottomTabs,
   {id:"resources", label:"Docs", d:"M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"},
   {id:"leads", label:"Submit Lead", d:"M12 5v14M5 12h14"},
-  {id:"leads", label:"Submit Lead", d:"M12 5v14M5 12h14"},
 ]
 
 export default function Home() {
@@ -757,6 +756,8 @@ export default function Home() {
     </div>
   )
 }
+
+
 
 
 
