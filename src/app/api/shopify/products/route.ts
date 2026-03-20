@@ -36,9 +36,22 @@ export async function GET() {
         "X-Shopify-Storefront-Access-Token": TOKEN!,
       },
       body: JSON.stringify({ query }),
-      next: { revalidate: 60 },
+      cache: "no-store",
     })
+
     const data = await res.json()
+
+    // Log full response for debugging
+    console.log("Shopify raw response:", JSON.stringify(data))
+
+    if (data.errors) {
+      return NextResponse.json({ error: data.errors[0]?.message || "Shopify query error" }, { status: 400 })
+    }
+
+    if (!data.data?.products?.edges) {
+      return NextResponse.json({ error: "Unexpected response", raw: data }, { status: 500 })
+    }
+
     const products = data.data.products.edges.map((e: any) => ({
       id: e.node.id,
       title: e.node.title,
@@ -54,8 +67,10 @@ export async function GET() {
         available: v.node.availableForSale,
       })),
     }))
+
     return NextResponse.json({ products })
   } catch (err: any) {
+    console.error("Shopify fetch error:", err)
     return NextResponse.json({ error: err.message }, { status: 500 })
   }
 }
