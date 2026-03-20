@@ -57,28 +57,35 @@ export async function GET() {
       return NextResponse.json({ error: data.errors }, { status: 403 });
     }
 
-    const products = data.data.products.edges.map((e: any) => {
-      const node = e.node;
-      const firstImage = node.images.edges[0]?.node;
-      const variants = node.variants.edges.map((v: any) => ({
-        id: v.node.id,
-        title: v.node.title,
-        price: parseFloat(v.node.priceV2.amount),
-        available: v.node.availableForSale,
-      }));
-      const firstVariant = variants[0];
+    const seen = new Set<string>();
+    const products = data.data.products.edges
+      .filter((e: any) => {
+        if (seen.has(e.node.id)) return false;
+        seen.add(e.node.id);
+        return true;
+      })
+      .map((e: any) => {
+        const node = e.node;
+        const firstImage = node.images.edges[0]?.node;
+        const variants = node.variants.edges.map((v: any) => ({
+          id: v.node.id,
+          title: v.node.title,
+          price: parseFloat(v.node.priceV2.amount),
+          available: v.node.availableForSale,
+        }));
+        const firstVariant = variants[0];
 
-      return {
-        id: node.id,
-        title: node.title,
-        description: node.description || "",
-        price: firstVariant?.price || 0,
-        currency: node.variants.edges[0]?.node.priceV2.currencyCode || "USD",
-        image: firstImage?.url || null,
-        imageAlt: firstImage?.altText || node.title,
-        variants,
-      };
-    });
+        return {
+          id: node.id,
+          title: node.title,
+          description: node.description || "",
+          price: firstVariant?.price || 0,
+          currency: node.variants.edges[0]?.node.priceV2.currencyCode || "USD",
+          image: firstImage?.url || null,
+          imageAlt: firstImage?.altText || node.title,
+          variants,
+        };
+      });
 
     return NextResponse.json({ products });
   } catch (err: any) {

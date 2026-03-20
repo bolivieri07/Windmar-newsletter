@@ -61,6 +61,7 @@ const bottomTabs = [
 
 const desktopTabs = [
   ...bottomTabs,
+  {id:"store", label:"Store", d:"M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4zM3 6h18M16 10a4 4 0 0 1-8 0"},
   {id:"resources", label:"Docs", d:"M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"},
   {id:"leads", label:"Submit Lead", d:"M12 5v14M5 12h14"},
 ]
@@ -655,20 +656,6 @@ export default function Home() {
             <div style={{background:"linear-gradient(135deg,#0f1d47 0%,#1a2f6e 100%)",borderRadius:16,padding:"2rem",marginBottom:"1.5rem",color:"white"}}>
               <h1 style={{fontSize:"2rem",fontWeight:800,margin:"0 0 0.5rem 0"}}>Submit a Lead</h1>
               <p style={{opacity:0.85,margin:0,fontSize:"1rem"}}>Fill out the form below to submit a new lead to GoHighLevel.</p>
-            </div>
-            <LeadUploadForm />
-          </div>
-        )}
-
-        {activeTab === "store" && (
-          <StorePage />
-        )}
-
-        {activeTab === "leads" && (
-          <div style={{maxWidth:720,margin:"0 auto"}}>
-            <div style={{background:"linear-gradient(135deg,#0f1d47 0%,#1a2f6e 100%)",borderRadius:16,padding:"2rem",marginBottom:"1.5rem",color:"white"}}>
-              <h1 style={{fontSize:"2rem",fontWeight:800,margin:"0 0 0.5rem 0"}}>Lead Upload</h1>
-              <p style={{opacity:0.85,margin:0,fontSize:"1rem"}}>Submit a new lead directly to GoHighLevel.</p>
             </div>
             <LeadUploadForm />
           </div>
