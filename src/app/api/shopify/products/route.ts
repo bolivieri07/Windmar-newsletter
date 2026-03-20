@@ -4,15 +4,8 @@ export async function GET() {
   const token = process.env.SHOPIFY_STOREFRONT_ACCESS_TOKEN;
   const domain = process.env.SHOPIFY_STORE_DOMAIN;
 
-  console.log("TOKEN EXISTS:", !!token);
-  console.log("TOKEN PREFIX:", token?.slice(0, 6));
-  console.log("DOMAIN:", domain);
-
   if (!token || !domain) {
-    return NextResponse.json(
-      { error: "Missing Shopify env vars", hasToken: !!token, hasDomain: !!domain },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Missing Shopify env vars" }, { status: 500 });
   }
 
   const query = `{
@@ -57,8 +50,6 @@ export async function GET() {
     });
 
     const data = await res.json();
-    console.log("SHOPIFY RESPONSE STATUS:", res.status);
-    console.log("SHOPIFY RESPONSE:", JSON.stringify(data).slice(0, 500));
 
     if (data.errors) {
       return NextResponse.json({ error: data.errors }, { status: 403 });
