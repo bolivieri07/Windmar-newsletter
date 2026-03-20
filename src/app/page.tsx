@@ -1,5 +1,6 @@
 ﻿"use client"
 import LeadUploadForm from "@/components/LeadUploadForm"
+import StorePage from "@/components/StorePage"
 import { useEffect, useState } from "react"
 import { createClient } from "@/lib/supabase/client"
 
@@ -329,6 +330,17 @@ export default function Home() {
             </svg>
             D2D Canvassing
           </a>
+          <button onClick={() => { setActiveTab("store"); setMobileMenuOpen(false) }}
+            style={{display:"flex",alignItems:"center",gap:"0.75rem",padding:"0.9rem 1.25rem",width:"100%",
+              background:activeTab==="store"?"rgba(248,155,36,0.15)":"transparent",
+              color:activeTab==="store"?"white":"rgba(255,255,255,0.6)",
+              border:"none",cursor:"pointer",fontSize:"0.95rem",fontWeight:700,fontFamily:"Barlow,system-ui,sans-serif",
+              borderRight:activeTab==="store"?"3px solid #f89b24":"3px solid transparent",transition:"all 0.15s"}}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={activeTab==="store"?"#f89b24":"rgba(255,255,255,0.4)"} strokeWidth="2">
+              <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4zM3 6h18M16 10a4 4 0 0 1-8 0"/>
+            </svg>
+            Store
+          </button>
           <button onClick={() => { setActiveTab("leads"); setMobileMenuOpen(false) }}
             style={{display:"flex",alignItems:"center",gap:"0.75rem",padding:"0.9rem 1.25rem",width:"100%",
               background:activeTab==="leads"?"rgba(248,155,36,0.15)":"transparent",
@@ -634,6 +646,10 @@ export default function Home() {
           </div>
         )}
 
+        {activeTab === "store" && (
+          <StorePage />
+        )}
+
         {activeTab === "leads" && (
           <div style={{maxWidth:720,margin:"0 auto"}}>
             <div style={{background:"linear-gradient(135deg,#0f1d47 0%,#1a2f6e 100%)",borderRadius:16,padding:"2rem",marginBottom:"1.5rem",color:"white"}}>
@@ -642,6 +658,10 @@ export default function Home() {
             </div>
             <LeadUploadForm />
           </div>
+        )}
+
+        {activeTab === "store" && (
+          <StorePage />
         )}
 
         {activeTab === "leads" && (
@@ -756,6 +776,9 @@ export default function Home() {
     </div>
   )
 }
+
+
+
 
 
 
