@@ -56,14 +56,12 @@ const bottomTabs = [
   {id:"spiffs", label:"Spiffs", d:"M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"},
   {id:"videos", label:"Videos", d:"M23 7l-7 5 7 5V7z M1 5h15a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H1z"},
   {id:"calendar", label:"Events", d:"M3 4h18a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z M16 2v4M8 2v4M1 10h22"},
-  {id:"leads", label:"Submit Lead", d:"M12 5v14M5 12h14"},
 ]
 
 const desktopTabs = [
   ...bottomTabs,
   {id:"store", label:"Store", d:"M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4zM3 6h18M16 10a4 4 0 0 1-8 0"},
   {id:"resources", label:"Docs", d:"M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"},
-  {id:"leads", label:"Submit Lead", d:"M12 5v14M5 12h14"},
 ]
 
 export default function Home() {
@@ -763,6 +761,7 @@ export default function Home() {
     </div>
   )
 }
+
 
 
 
