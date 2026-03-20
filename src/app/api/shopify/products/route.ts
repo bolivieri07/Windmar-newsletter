@@ -9,7 +9,7 @@ export async function GET() {
   }
 
   const query = `{
-    products(first: 10) {
+    products(first: 20) {
       edges {
         node {
           id
@@ -23,10 +23,12 @@ export async function GET() {
               }
             }
           }
-          variants(first: 1) {
+          variants(first: 10) {
             edges {
               node {
                 id
+                title
+                availableForSale
                 priceV2 {
                   amount
                   currencyCode
@@ -55,7 +57,30 @@ export async function GET() {
       return NextResponse.json({ error: data.errors }, { status: 403 });
     }
 
-    return NextResponse.json(data.data.products.edges.map((e: any) => e.node));
+    const products = data.data.products.edges.map((e: any) => {
+      const node = e.node;
+      const firstImage = node.images.edges[0]?.node;
+      const variants = node.variants.edges.map((v: any) => ({
+        id: v.node.id,
+        title: v.node.title,
+        price: parseFloat(v.node.priceV2.amount),
+        available: v.node.availableForSale,
+      }));
+      const firstVariant = variants[0];
+
+      return {
+        id: node.id,
+        title: node.title,
+        description: node.description || "",
+        price: firstVariant?.price || 0,
+        currency: node.variants.edges[0]?.node.priceV2.currencyCode || "USD",
+        image: firstImage?.url || null,
+        imageAlt: firstImage?.altText || node.title,
+        variants,
+      };
+    });
+
+    return NextResponse.json({ products });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
