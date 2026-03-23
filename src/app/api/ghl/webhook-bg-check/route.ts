@@ -1,8 +1,6 @@
 ﻿import { NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
 
-const BG_CHECK_DOC_NAME = "Windmar- Home Depot Background Check"
-
 function getSupabase() {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -13,16 +11,18 @@ function getSupabase() {
 export async function POST(req: Request) {
   try {
     const body = await req.json()
-    console.log("BG WEBHOOK FULL PAYLOAD:", JSON.stringify(body))
+    console.log("BG WEBHOOK RECEIVED:", JSON.stringify(body).slice(0, 500))
 
-    // GHL standard data uses different keys than custom data
-    const contactId = body.contactId || body.contact_id || body.id || null
-    const contactName = body.contactName || body.contact_name || body.full_name ||
-      ((body.first_name || body.firstName || "") + " " + (body.last_name || body.lastName || "")).trim() || "Unknown"
-    const contactEmail = body.email || body.contactEmail || body.contact_email || null
-    const status = body.status || "sent"
-    const documentId = body.documentId || null
-    const createdAt = body.createdAt || body.date_added || body.dateAdded || new Date().toISOString()
+    // GHL sends custom data nested under body.customData AND as top-level standard fields
+    const custom = body.customData || {}
+    const contactId = custom.contactId || body.contact_id || body.contactId || null
+    const contactName = custom.contactName || body.full_name ||
+      ((body.first_name || "") + " " + (body.last_name || "")).trim() || "Unknown"
+    const contactEmail = custom.email || body.email || null
+    const status = custom.status || body.status || "sent"
+    const documentId = custom.documentId || body.documentId || null
+    const signedDate = custom.signedDate || body.signedDate || null
+    const createdAt = custom.createdAt || body.date_created || new Date().toISOString()
 
     console.log("WEBHOOK PARSED:", JSON.stringify({ contactId, contactName, contactEmail, status, documentId }))
 
@@ -32,16 +32,28 @@ export async function POST(req: Request) {
     }
 
     const supabase = getSupabase()
+    const now = new Date().toISOString()
 
+    // Build update fields based on status
+    const updateFields: Record<string, unknown> = {
+      doc_status: status,
+      contact_name: contactName,
+      contact_email: contactEmail,
+      ghl_updated_at: now,
+    }
+
+    if (status === "completed" || status === "signed") {
+      updateFields.doc_status = "completed"
+      updateFields.signed_date = signedDate || now
+    }
+
+    // If we have a documentId, upsert by documentId
     if (documentId) {
       const row = {
         ghl_document_id: documentId,
         contact_id: contactId,
-        contact_name: contactName,
-        contact_email: contactEmail,
-        doc_status: status,
         ghl_created_at: createdAt,
-        ghl_updated_at: new Date().toISOString(),
+        ...updateFields,
       }
       const { error } = await supabase.from("bg_checks").upsert(row, { onConflict: "ghl_document_id" })
       if (error) {
@@ -51,6 +63,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ received: true, synced: true, method: "documentId", contactName, status })
     }
 
+    // No documentId — find existing record by contactId
     const { data: existing } = await supabase
       .from("bg_checks")
       .select("id")
@@ -61,12 +74,7 @@ export async function POST(req: Request) {
     if (existing && existing.length > 0) {
       const { error } = await supabase
         .from("bg_checks")
-        .update({
-          doc_status: status,
-          contact_name: contactName,
-          contact_email: contactEmail,
-          ghl_updated_at: new Date().toISOString(),
-        })
+        .update(updateFields)
         .eq("id", existing[0].id)
 
       if (error) {
@@ -76,14 +84,12 @@ export async function POST(req: Request) {
       return NextResponse.json({ received: true, synced: true, method: "update", contactName, status })
     }
 
+    // No existing record — insert new
     const row = {
       ghl_document_id: `webhook-${contactId}-${Date.now()}`,
       contact_id: contactId,
-      contact_name: contactName,
-      contact_email: contactEmail,
-      doc_status: status,
       ghl_created_at: createdAt,
-      ghl_updated_at: new Date().toISOString(),
+      ...updateFields,
     }
     const { error } = await supabase.from("bg_checks").insert(row)
     if (error) {
