@@ -320,14 +320,14 @@ export default function Home() {
             </svg>
             Academy Website
           </a>
-          <a href="/d2d"
+          <a href="https://solarcommand-app.vercel.app/" target="_blank" rel="noreferrer"
             style={{display:"flex",alignItems:"center",gap:"0.75rem",padding:"0.9rem 1.25rem",width:"100%",
               background:"transparent",color:"rgba(255,255,255,0.6)",textDecoration:"none",fontSize:"0.95rem",fontWeight:700,
               borderRight:"3px solid transparent"}}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="2">
-              <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>
+              <path d="M12 20V10M18 20V4M6 20v-4"/>
             </svg>
-            D2D Canvassing
+            Solar Command
           </a>
           <button onClick={() => { setActiveTab("store"); setMobileMenuOpen(false) }}
             style={{display:"flex",alignItems:"center",gap:"0.75rem",padding:"0.9rem 1.25rem",width:"100%",
