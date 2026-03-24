@@ -1,8 +1,11 @@
 ﻿import { NextResponse } from 'next/server';
 
-const ZAPIER_WEBHOOK = 'https://hooks.zapier.com/hooks/catch/1588078/uuqt28n/';
-
 export async function POST(request) {
+  const webhook = process.env.ZAPIER_WEBHOOK_URL;
+  if (!webhook) {
+    return NextResponse.json({ message: 'Webhook not configured' }, { status: 500 });
+  }
+
   const {
     firstName, lastName, phone, email, street, city,
     repId, apptDate, leadSource, storeLocation,
@@ -30,7 +33,7 @@ export async function POST(request) {
   };
 
   try {
-    const res = await fetch(ZAPIER_WEBHOOK, {
+    const res = await fetch(webhook, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
