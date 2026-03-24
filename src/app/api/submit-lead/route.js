@@ -4,38 +4,29 @@ const ZAPIER_WEBHOOK = 'https://hooks.zapier.com/hooks/catch/1588078/uuqt28n/';
 
 export async function POST(request) {
   const {
-    clientName, phone, email, streetAddress, city,
-    repId, appointmentDate, appointmentTime, leadSource, boothLocation,
+    firstName, lastName, phone, email, street, city,
+    repId, apptDate, leadSource, storeLocation,
   } = await request.json();
 
-  if (!clientName || !phone || !email || !repId || !leadSource) {
+  if (!firstName || !lastName || !phone || !email || !repId || !leadSource) {
     return NextResponse.json({ message: 'Missing required fields' }, { status: 400 });
   }
-  if (leadSource === 'Booth & Special Events' && !boothLocation) {
-    return NextResponse.json({ message: 'Store location is required for Booth & Special Events' }, { status: 400 });
+  if (leadSource === 'Booths and Special Events' && !storeLocation) {
+    return NextResponse.json({ message: 'Store location is required for Booths and Special Events' }, { status: 400 });
   }
 
-  const parts = clientName.trim().split(' ');
-  const firstName = parts[0];
-  const lastName = parts.slice(1).join(' ') || '';
-
-  // Map fields to match the Zapier webhook format (same as the HTML form)
   const payload = {
     firstName,
     lastName,
     phone,
     email,
-    street: streetAddress,
-    city,
-    address: `${streetAddress}${streetAddress && city ? ', ' : ''}${city}`,
+    street: street || '',
+    city: city || '',
+    address: `${street || ''}${street && city ? ', ' : ''}${city || ''}`,
     repId,
-    apptDate: appointmentDate && appointmentTime
-      ? `${appointmentDate}T${appointmentTime}`
-      : appointmentDate || '',
-    leadSource: leadSource === 'Booth & Special Events'
-      ? 'Booths and Special Events'
-      : leadSource,
-    storeLocation: boothLocation || '',
+    apptDate: apptDate || '',
+    leadSource,
+    storeLocation: storeLocation || '',
   };
 
   try {

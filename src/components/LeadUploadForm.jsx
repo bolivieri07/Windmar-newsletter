@@ -1,7 +1,7 @@
 ﻿'use client';
 import { useState } from 'react';
 
-const LEAD_SOURCES = ['Canvassing', 'FFR', 'Booth & Special Events'];
+const LEAD_SOURCES = ['Academy', 'Booths and Special Events'];
 
 const BOOTH_LOCATIONS = [
   'Bravo Semoran',
@@ -16,9 +16,8 @@ const BOOTH_LOCATIONS = [
 ];
 
 const EMPTY_FORM = {
-  clientName: '', phone: '', email: '', streetAddress: '',
-  city: '', repId: '', appointmentDate: '', appointmentTime: '',
-  leadSource: '', boothLocation: '',
+  firstName: '', lastName: '', phone: '', email: '', street: '',
+  city: '', repId: '', apptDate: '', leadSource: '', storeLocation: '',
 };
 
 const inputStyle = {
@@ -44,7 +43,7 @@ export default function LeadUploadForm() {
     const { name, value } = e.target;
     setForm(prev => ({
       ...prev, [name]: value,
-      ...(name === 'leadSource' && value !== 'Booth & Special Events' ? { boothLocation: '' } : {}),
+      ...(name === 'leadSource' && value !== 'Booths and Special Events' ? { storeLocation: '' } : {}),
     }));
   };
 
@@ -68,6 +67,9 @@ export default function LeadUploadForm() {
     }
   };
 
+  const focus = (e) => { e.target.style.borderColor = '#1a2f6e'; };
+  const blur = (e) => { e.target.style.borderColor = '#e5e7eb'; };
+
   return (
     <div style={{ background: 'white', borderRadius: 16, padding: '2rem', maxWidth: 560, margin: '0 auto', boxShadow: '0 4px 24px rgba(0,0,0,0.08)', border: '1px solid #f3f4f6' }}>
 
@@ -84,73 +86,64 @@ export default function LeadUploadForm() {
 
       <form onSubmit={handleSubmit}>
 
-        <div style={{ marginBottom: '1rem' }}>
-          <label style={labelStyle}>Client Name *</label>
-          <input type="text" name="clientName" value={form.clientName} onChange={handle} required placeholder="Jane Smith" style={inputStyle}
-            onFocus={e => e.target.style.borderColor = '#1a2f6e'} onBlur={e => e.target.style.borderColor = '#e5e7eb'} />
+        <div style={rowStyle}>
+          <div>
+            <label style={labelStyle}>First Name *</label>
+            <input type="text" name="firstName" value={form.firstName} onChange={handle} required placeholder="Jane" style={inputStyle} onFocus={focus} onBlur={blur} />
+          </div>
+          <div>
+            <label style={labelStyle}>Last Name *</label>
+            <input type="text" name="lastName" value={form.lastName} onChange={handle} required placeholder="Smith" style={inputStyle} onFocus={focus} onBlur={blur} />
+          </div>
         </div>
 
         <div style={rowStyle}>
           <div>
             <label style={labelStyle}>Phone *</label>
-            <input type="tel" name="phone" value={form.phone} onChange={handle} required placeholder="(407) 555-0100" style={inputStyle}
-              onFocus={e => e.target.style.borderColor = '#1a2f6e'} onBlur={e => e.target.style.borderColor = '#e5e7eb'} />
+            <input type="tel" name="phone" value={form.phone} onChange={handle} required placeholder="(407) 555-0100" style={inputStyle} onFocus={focus} onBlur={blur} />
           </div>
           <div>
             <label style={labelStyle}>Email *</label>
-            <input type="email" name="email" value={form.email} onChange={handle} required placeholder="client@email.com" style={inputStyle}
-              onFocus={e => e.target.style.borderColor = '#1a2f6e'} onBlur={e => e.target.style.borderColor = '#e5e7eb'} />
-          </div>
-        </div>
-
-        <div style={{ marginBottom: '1rem' }}>
-          <label style={labelStyle}>Street Address *</label>
-          <input type="text" name="streetAddress" value={form.streetAddress} onChange={handle} required placeholder="123 Solar Lane" style={inputStyle}
-            onFocus={e => e.target.style.borderColor = '#1a2f6e'} onBlur={e => e.target.style.borderColor = '#e5e7eb'} />
-        </div>
-
-        <div style={{ marginBottom: '1rem' }}>
-          <label style={labelStyle}>City *</label>
-          <input type="text" name="city" value={form.city} onChange={handle} required placeholder="Orlando" style={inputStyle}
-            onFocus={e => e.target.style.borderColor = '#1a2f6e'} onBlur={e => e.target.style.borderColor = '#e5e7eb'} />
-        </div>
-
-        <div style={{ marginBottom: '1rem' }}>
-          <label style={labelStyle}>Windmar Rep ID *</label>
-          <input type="text" name="repId" value={form.repId} onChange={handle} required pattern="[0-9]{10}" maxLength={10} placeholder="4075551234" style={inputStyle}
-            onFocus={e => e.target.style.borderColor = '#1a2f6e'} onBlur={e => e.target.style.borderColor = '#e5e7eb'} />
-          <div style={{ fontSize: '0.75rem', color: '#9ca3af', marginTop: '0.3rem', fontFamily: 'Barlow,system-ui,sans-serif' }}>
-            10 digits, no spaces or dashes
+            <input type="email" name="email" value={form.email} onChange={handle} required placeholder="client@email.com" style={inputStyle} onFocus={focus} onBlur={blur} />
           </div>
         </div>
 
         <div style={rowStyle}>
           <div>
-            <label style={labelStyle}>Appointment Date *</label>
-            <input type="date" name="appointmentDate" value={form.appointmentDate} onChange={handle} required style={inputStyle}
-              onFocus={e => e.target.style.borderColor = '#1a2f6e'} onBlur={e => e.target.style.borderColor = '#e5e7eb'} />
+            <label style={labelStyle}>Street Address</label>
+            <input type="text" name="street" value={form.street} onChange={handle} placeholder="123 Solar Lane" style={inputStyle} onFocus={focus} onBlur={blur} />
           </div>
           <div>
-            <label style={labelStyle}>Appointment Time *</label>
-            <input type="time" name="appointmentTime" value={form.appointmentTime} onChange={handle} required style={inputStyle}
-              onFocus={e => e.target.style.borderColor = '#1a2f6e'} onBlur={e => e.target.style.borderColor = '#e5e7eb'} />
+            <label style={labelStyle}>City</label>
+            <input type="text" name="city" value={form.city} onChange={handle} placeholder="Orlando" style={inputStyle} onFocus={focus} onBlur={blur} />
           </div>
         </div>
 
         <div style={{ marginBottom: '1rem' }}>
+          <label style={labelStyle}>Windmar Rep ID *</label>
+          <input type="text" name="repId" value={form.repId} onChange={handle} required placeholder="Your phone number" style={inputStyle} onFocus={focus} onBlur={blur} />
+          <div style={{ fontSize: '0.75rem', color: '#9ca3af', marginTop: '0.3rem', fontFamily: 'Barlow,system-ui,sans-serif' }}>
+            Your phone number as your Rep ID
+          </div>
+        </div>
+
+        <div style={{ marginBottom: '1rem' }}>
+          <label style={labelStyle}>Appointment Date & Time</label>
+          <input type="datetime-local" name="apptDate" value={form.apptDate} onChange={handle} style={inputStyle} onFocus={focus} onBlur={blur} />
+        </div>
+
+        <div style={{ marginBottom: '1rem' }}>
           <label style={labelStyle}>Lead Source *</label>
-          <select name="leadSource" value={form.leadSource} onChange={handle} required style={{ ...inputStyle, cursor: 'pointer' }}
-            onFocus={e => e.target.style.borderColor = '#1a2f6e'} onBlur={e => e.target.style.borderColor = '#e5e7eb'}>
+          <select name="leadSource" value={form.leadSource} onChange={handle} required style={{ ...inputStyle, cursor: 'pointer' }} onFocus={focus} onBlur={blur}>
             <option value="">Select lead source</option>
             {LEAD_SOURCES.map(src => <option key={src} value={src}>{src}</option>)}
           </select>
         </div>
 
-        {form.leadSource === 'Booth & Special Events' && (
+        {form.leadSource === 'Booths and Special Events' && (
           <div style={{ marginBottom: '1rem' }}>
-            <label style={labelStyle}>Store / Event Location *</label>
-            <select name="boothLocation" value={form.boothLocation} onChange={handle} required style={{ ...inputStyle, cursor: 'pointer' }}
-              onFocus={e => e.target.style.borderColor = '#1a2f6e'} onBlur={e => e.target.style.borderColor = '#e5e7eb'}>
+            <label style={labelStyle}>Store Location *</label>
+            <select name="storeLocation" value={form.storeLocation} onChange={handle} required style={{ ...inputStyle, cursor: 'pointer' }} onFocus={focus} onBlur={blur}>
               <option value="">Select store</option>
               {BOOTH_LOCATIONS.map(loc => <option key={loc} value={loc}>{loc}</option>)}
             </select>
