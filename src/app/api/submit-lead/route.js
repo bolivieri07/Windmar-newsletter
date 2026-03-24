@@ -1,5 +1,7 @@
 ﻿import { NextResponse } from 'next/server';
 
+const ZAPIER_WEBHOOK = 'https://hooks.zapier.com/hooks/catch/1588078/uuqt28n/';
+
 export async function POST(request) {
   const {
     clientName, phone, email, streetAddress, city,
@@ -17,57 +19,39 @@ export async function POST(request) {
   const firstName = parts[0];
   const lastName = parts.slice(1).join(' ') || '';
 
-  const sourceLabel = leadSource === 'Booth & Special Events'
-    ? `Booth & Special Events - ${boothLocation}`
-    : leadSource;
-
+  // Map fields to match the Zapier webhook format (same as the HTML form)
   const payload = {
     firstName,
     lastName,
-    email,
     phone,
-    address1: streetAddress,
+    email,
+    street: streetAddress,
     city,
-    source: sourceLabel,
-    tags: [leadSource, `rep:${repId}`, ...(boothLocation ? [boothLocation] : [])],
-    customField: {
-      rep_id: repId,
-      appointment_date_time: `${appointmentDate} ${appointmentTime}`,
-      lead_source: sourceLabel,
-    },
+    address: `${streetAddress}${streetAddress && city ? ', ' : ''}${city}`,
+    repId,
+    apptDate: appointmentDate && appointmentTime
+      ? `${appointmentDate}T${appointmentTime}`
+      : appointmentDate || '',
+    leadSource: leadSource === 'Booth & Special Events'
+      ? 'Booths and Special Events'
+      : leadSource,
+    storeLocation: boothLocation || '',
   };
 
   try {
-    const ghlRes = await fetch('https://rest.gohighlevel.com/v1/contacts/', {
+    const res = await fetch(ZAPIER_WEBHOOK, {
       method: 'POST',
-      headers: {
-        Authorization: `Bearer ${process.env.GHL_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
 
-    const ghlData = await ghlRes.json();
-
-    if (!ghlRes.ok) {
-      console.error('GHL error:', ghlData);
-      return NextResponse.json({ message: ghlData?.message || 'GHL API error' }, { status: ghlRes.status });
+    if (!res.ok) {
+      const text = await res.text();
+      console.error('Zapier error:', text);
+      return NextResponse.json({ message: 'Zapier webhook error' }, { status: res.status });
     }
 
-    if (ghlData?.contact?.id) {
-      await fetch(`https://rest.gohighlevel.com/v1/contacts/${ghlData.contact.id}/notes/`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${process.env.GHL_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          body: `Lead submitted via Windmar Solar Academy\n\nRep ID: ${repId}\nAppointment: ${appointmentDate} at ${appointmentTime}\nLead Source: ${sourceLabel}\nAddress: ${streetAddress}, ${city}`,
-        }),
-      });
-    }
-
-    return NextResponse.json({ success: true, contactId: ghlData?.contact?.id });
+    return NextResponse.json({ success: true });
   } catch (err) {
     console.error('submit-lead error:', err);
     return NextResponse.json({ message: err.message }, { status: 500 });
