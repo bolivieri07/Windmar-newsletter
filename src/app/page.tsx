@@ -146,8 +146,8 @@ export default function Home() {
     return m[t] || "#f89b24"
   }
 
-  const filteredPosts = feedFilter === "all" ? posts : posts.filter(p => p.post_type === feedFilter)
-  const recentPosts = posts.slice(0,4)
+  const filteredPosts = (feedFilter === "all" ? posts : posts.filter(p => p.post_type === feedFilter)).filter(p => p.post_type !== "event")
+  const recentPosts = posts.filter(p => p.post_type !== "event").slice(0,4)
 
   function getEmbedUrl(url: string): string | null {
     if (!url) return null
@@ -497,7 +497,7 @@ export default function Home() {
               <div className="x-feed-title">Feed</div>
             </div>
             <div className="x-filter-bar">
-              {["all","announcement","daily","weekly","event","giveaway","training"].map(f => (
+              {["all","announcement"].map(f => (
                 <button key={f} className={"x-filter-btn " + (feedFilter===f?"active":"")} onClick={() => setFeedFilter(f)}>
                   {f==="all"?"For you":f.charAt(0).toUpperCase()+f.slice(1)}
                 </button>
@@ -764,6 +764,7 @@ export default function Home() {
     </div>
   )
 }
+
 
 
 
