@@ -601,12 +601,25 @@ export default function Home() {
               <h1 style={{color:"#1a2f6e",fontSize:"1.75rem",fontWeight:800,margin:"0 0 0.25rem 0"}}>Events</h1>
               <p style={{color:"#6b7280",fontSize:"0.9rem",margin:0}}>Team calls, workshops, and town halls</p>
             </div>
+            <div style={{background:"white",borderRadius:12,padding:"0.75rem 1rem",boxShadow:"0 2px 8px rgba(0,0,0,0.06)",border:"1px solid #f3f4f6",marginBottom:"1.25rem",display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:"0.75rem"}}>
+              <div style={{display:"flex",alignItems:"center",gap:"0.5rem"}}>
+                <button onClick={() => { const s=new Date(eventFilterStart); s.setDate(s.getDate()-7); s.setHours(0,0,0,0); const e=new Date(s); e.setDate(e.getDate()+6); e.setHours(23,59,59,999); setEventFilterStart(s); setEventFilterEnd(e) }} style={{width:34,height:34,borderRadius:8,border:"1.5px solid #e5e7eb",background:"white",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:"#374151"}}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6"/></svg></button>
+                <button onClick={() => { const s=new Date(); s.setDate(s.getDate()-s.getDay()); s.setHours(0,0,0,0); const e=new Date(s); e.setDate(e.getDate()+6); e.setHours(23,59,59,999); setEventFilterStart(s); setEventFilterEnd(e) }} style={{padding:"0.4rem 0.9rem",borderRadius:8,border:"1.5px solid #e5e7eb",background:"white",color:"#1a2f6e",fontSize:"0.82rem",fontWeight:700,cursor:"pointer",fontFamily:"Barlow,system-ui,sans-serif"}}>This Week</button>
+                <button onClick={() => { const s=new Date(eventFilterStart); s.setDate(s.getDate()+7); s.setHours(0,0,0,0); const e=new Date(s); e.setDate(e.getDate()+6); e.setHours(23,59,59,999); setEventFilterStart(s); setEventFilterEnd(e) }} style={{width:34,height:34,borderRadius:8,border:"1.5px solid #e5e7eb",background:"white",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:"#374151"}}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="9 18 15 12 9 6"/></svg></button>
+                <div style={{fontWeight:800,color:"#1a2f6e",fontSize:"0.95rem",marginLeft:"0.25rem"}}>{eventFilterStart.toLocaleDateString("en-US",{month:"short",day:"numeric"}) + " - " + eventFilterEnd.toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"})}</div>
+              </div>
+              <div style={{position:"relative"}}>
+                <button onClick={() => setEventPickerOpen(!eventPickerOpen)} style={{padding:"0.4rem 0.9rem",borderRadius:8,border:"1.5px solid #e5e7eb",background:"white",color:"#6b7280",fontSize:"0.82rem",fontWeight:700,cursor:"pointer",fontFamily:"Barlow,system-ui,sans-serif",display:"flex",alignItems:"center",gap:"0.4rem"}}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>Pick Date</button>
+                {eventPickerOpen && <div style={{position:"absolute",top:"100%",right:0,marginTop:6,zIndex:50,background:"white",borderRadius:10,padding:"0.75rem",boxShadow:"0 8px 32px rgba(0,0,0,0.15)",border:"1px solid #e5e7eb"}}><input type="date" value={eventPickerVal} onChange={e => { setEventPickerVal(e.target.value); if(e.target.value){const d=new Date(e.target.value+"T00:00:00"); const s=new Date(d); s.setDate(s.getDate()-s.getDay()); s.setHours(0,0,0,0); const en=new Date(s); en.setDate(en.getDate()+6); en.setHours(23,59,59,999); setEventFilterStart(s); setEventFilterEnd(en); setEventPickerOpen(false)} }} autoFocus style={{padding:"0.5rem",border:"1.5px solid #e5e7eb",borderRadius:8,fontSize:"0.9rem",fontFamily:"Barlow,system-ui,sans-serif",outline:"none"}} /></div>}
+              </div>
+            </div>
             {loading ? (
               <div className="loading-card">Loading events...</div>
-            ) : events.length === 0 ? (
-              <div className="loading-card">No events for this period. Try a different date range.</div>
+            ) : (() => { const filteredEvts = events.filter(ev => { const ed = new Date(ev.event_date); return ed >= eventFilterStart && ed <= eventFilterEnd }); return filteredEvts.length === 0 ? (
+              <div style={{background:"white",borderRadius:14,padding:"3rem",textAlign:"center",color:"#9ca3af",fontWeight:600,boxShadow:"0 2px 8px rgba(0,0,0,0.06)"}}>No events this week. Use the arrows to browse other weeks.</div>
             ) : (
               <div style={{display:"grid",gap:"1rem"}}>
+                {filteredEvts.map(event => {
                 {events.map(event => {
                   const d = new Date(event.event_date)
                   const coverImg = event.cover_image_url || event.posts?.cover_image_url
@@ -646,7 +659,7 @@ export default function Home() {
                   )
                 })}
               </div>
-            )}
+            )})()
           </div>
         )}
 
