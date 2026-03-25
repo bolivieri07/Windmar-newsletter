@@ -79,8 +79,10 @@ export default function Home() {
   const [rsvpEvent, setRsvpEvent] = useState<Event | null>(null)
   const [rsvpForm, setRsvpForm] = useState({ name: "", email: "", phone: "" })
   const [rsvpSending, setRsvpSending] = useState(false)
-  const [eventFilterStart, setEventFilterStart] = useState<Date | null>(null)
-  const [eventFilterEnd, setEventFilterEnd] = useState<Date | null>(null)
+  const [eventFilterStart, setEventFilterStart] = useState<Date>(() => { const d = new Date(); d.setDate(d.getDate() - d.getDay()); d.setHours(0,0,0,0); return d })
+  const [eventFilterEnd, setEventFilterEnd] = useState<Date>(() => { const d = new Date(); d.setDate(d.getDate() - d.getDay() + 6); d.setHours(23,59,59,999); return d })
+  const [eventPickerOpen, setEventPickerOpen] = useState(false)
+  const [eventPickerVal, setEventPickerVal] = useState("")
 
   async function handleRsvp() {
     if (!rsvpForm.name.trim() || !rsvpForm.email.trim() || !rsvpForm.phone.trim()) { showToast("Name, email, and phone required"); return }
@@ -764,6 +766,9 @@ export default function Home() {
     </div>
   )
 }
+
+
+
 
 
 
