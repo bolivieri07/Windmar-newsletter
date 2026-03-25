@@ -620,7 +620,7 @@ export default function Home() {
             ) : (
               <div style={{display:"grid",gap:"1rem"}}>
                 {filteredEvts.map(event => {
-                {events.map(event => {
+
                   const d = new Date(event.event_date)
                   const coverImg = event.cover_image_url || event.posts?.cover_image_url
                   return (
