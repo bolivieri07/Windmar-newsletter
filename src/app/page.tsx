@@ -1,6 +1,7 @@
 ﻿"use client"
 import LeadUploadForm from "@/components/LeadUploadForm"
 import StorePage from "@/components/StorePage"
+import EventDateFilter from "@/components/EventDateFilter"
 import { useEffect, useState } from "react"
 import { createClient } from "@/lib/supabase/client"
 
@@ -78,6 +79,8 @@ export default function Home() {
   const [rsvpEvent, setRsvpEvent] = useState<Event | null>(null)
   const [rsvpForm, setRsvpForm] = useState({ name: "", email: "", phone: "" })
   const [rsvpSending, setRsvpSending] = useState(false)
+  const [eventFilterStart, setEventFilterStart] = useState<Date | null>(null)
+  const [eventFilterEnd, setEventFilterEnd] = useState<Date | null>(null)
 
   async function handleRsvp() {
     if (!rsvpForm.name.trim() || !rsvpForm.email.trim() || !rsvpForm.phone.trim()) { showToast("Name, email, and phone required"); return }
@@ -599,7 +602,7 @@ export default function Home() {
             {loading ? (
               <div className="loading-card">Loading events...</div>
             ) : events.length === 0 ? (
-              <div className="loading-card">No upcoming events. Check back soon!</div>
+              <div className="loading-card">No events for this period. Try a different date range.</div>
             ) : (
               <div style={{display:"grid",gap:"1rem"}}>
                 {events.map(event => {
@@ -761,6 +764,7 @@ export default function Home() {
     </div>
   )
 }
+
 
 
 

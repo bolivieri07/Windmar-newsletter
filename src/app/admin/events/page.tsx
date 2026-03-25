@@ -1,6 +1,7 @@
 ﻿'use client'
 import { useEffect, useState } from "react"
 import { createClient } from "@/lib/supabase/client"
+import EventDateFilter from "@/components/EventDateFilter"
 
 export default function EventsPage() {
   const [events, setEvents] = useState<any[]>([])
@@ -59,6 +60,8 @@ export default function EventsPage() {
     recurrence_end: "",
     custom_days: [] as string[],
   })
+  const [filterStart, setFilterStart] = useState<Date | null>(null)
+  const [filterEnd, setFilterEnd] = useState<Date | null>(null)
   const supabase = createClient()
 
   useEffect(() => { fetchEvents() }, [])
@@ -220,6 +223,18 @@ export default function EventsPage() {
 
   const isUpcoming = (date: string) => new Date(date) > new Date()
 
+  function handleFilterChange(start: Date, end: Date) {
+    setFilterStart(start)
+    setFilterEnd(end)
+  }
+
+  const filteredEvents = (filterStart && filterEnd)
+    ? events.filter(e => {
+        const d = new Date(e.event_date)
+        return d >= filterStart && d <= filterEnd
+      })
+    : events
+
   const inputStyle = {
     width: "100%", padding: "0.8rem 1rem", border: "1.5px solid #e5e7eb",
     borderRadius: 8, fontSize: "0.95rem", fontFamily: "Barlow,system-ui,sans-serif",
@@ -248,6 +263,8 @@ export default function EventsPage() {
           {showForm ? "Cancel" : "+ New Event"}
         </button>
       </div>
+
+      <EventDateFilter onFilterChange={handleFilterChange} />
 
       {showForm && (
         <div style={{ background: "white", borderRadius: 14, padding: "1.5rem", boxShadow: "0 2px 8px rgba(0,0,0,0.06)", border: "1px solid #f3f4f6", marginBottom: "1.5rem" }}>
@@ -445,13 +462,13 @@ export default function EventsPage() {
 
       {loading ? (
         <div style={{ background: "white", borderRadius: 14, padding: "3rem", textAlign: "center", color: "#9ca3af", fontWeight: 600, boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>Loading events...</div>
-      ) : events.length === 0 ? (
+      ) : filteredEvents.length === 0 ? (
         <div style={{ background: "white", borderRadius: 14, padding: "3rem", textAlign: "center", color: "#9ca3af", fontWeight: 600, boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
-          No events yet. Create your first one!
+          No events for this period.
         </div>
       ) : (
         <div style={{ display: "grid", gap: "1rem" }}>
-          {events.map(event => {
+          {filteredEvents.map(event => {
             const upcoming = isUpcoming(event.event_date)
             const eventDate = new Date(event.event_date)
             const coverImg = event.cover_image_url || event.posts?.cover_image_url
@@ -537,3 +554,4 @@ export default function EventsPage() {
     </div>
   )
 }
+
