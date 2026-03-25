@@ -598,7 +598,7 @@ export default function Home() {
         {activeTab === "calendar" && (
           <div style={{maxWidth:900,margin:"0 auto"}}>
             <div style={{marginBottom:"1.25rem"}}>
-              <h1 style={{color:"#1a2f6e",fontSize:"1.75rem",fontWeight:800,margin:"0 0 0.25rem 0"}}>Upcoming Events</h1>
+              <h1 style={{color:"#1a2f6e",fontSize:"1.75rem",fontWeight:800,margin:"0 0 0.25rem 0"}}>Events</h1>
               <p style={{color:"#6b7280",fontSize:"0.9rem",margin:0}}>Team calls, workshops, and town halls</p>
             </div>
             {loading ? (
@@ -766,6 +766,9 @@ export default function Home() {
     </div>
   )
 }
+
+
+
 
 
 
