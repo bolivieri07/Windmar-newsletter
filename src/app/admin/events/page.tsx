@@ -58,6 +58,7 @@ export default function EventsPage() {
     is_rsvp_open: true,
     recurrence: "none",
     recurrence_end: "",
+    no_end_date: false,
     custom_days: [] as string[],
   })
   const [filterStart, setFilterStart] = useState<Date | null>(null)
@@ -147,7 +148,7 @@ export default function EventsPage() {
   async function handleCreate() {
     if (!form.post_title.trim()) { showToast("Event title is required"); return }
     if (!form.event_date) { showToast("Event date is required"); return }
-    if (form.recurrence !== "none" && !form.recurrence_end) { showToast("Recurrence end date is required"); return }
+    if (form.recurrence !== "none" && !form.recurrence_end && !form.no_end_date) { showToast("Recurrence end date is required"); return }
 
     setSaving(true)
 
@@ -202,7 +203,8 @@ export default function EventsPage() {
     setPendingNotify({ title: form.post_title, excerpt: form.post_excerpt })
     setShowNotifyConfirm(true)
     setShowForm(false)
-    setForm({ post_title: "", post_excerpt: "", cover_image_url: "", event_date: "", event_end_date: "", location: "", address: "", is_virtual: false, virtual_link: "", max_attendees: "", is_rsvp_open: true, recurrence: "none", recurrence_end: "", custom_days: [] })
+    setForm({ post_title: "", post_excerpt: "", cover_image_url: "", event_date: "", event_end_date: "", location: "", address: "", is_virtual: false, virtual_link: "", max_attendees: "", is_rsvp_open: true, recurrence: "none", recurrence_end: "",
+    no_end_date: false, custom_days: [] })
     fetchEvents()
     setSaving(false)
   }
@@ -560,5 +562,8 @@ export default function EventsPage() {
     </div>
   )
 }
+
+
+
 
 
