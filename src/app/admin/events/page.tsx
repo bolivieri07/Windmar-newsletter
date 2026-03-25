@@ -59,6 +59,8 @@ export default function EventsPage() {
   const [form, setForm] = useState({...EMPTY_FORM})
   const [reminders, setReminders] = useState<Reminder[]>([])
   const [previewIdx, setPreviewIdx] = useState<number|null>(null)
+  const [showBulkEdit, setShowBulkEdit] = useState(false)
+  const [siblingEvents, setSiblingEvents] = useState<any[]>([])
   const [filterStart, setFilterStart] = useState<Date|null>(null)
   const [filterEnd, setFilterEnd] = useState<Date|null>(null)
   const supabase = createClient()
@@ -103,7 +105,14 @@ export default function EventsPage() {
     setShowForm(true)
   }
 
+  function getBaseTitle(title: string): string {
+    return title.replace(/\s*\([A-Z][a-z]{2}\s\d{1,2}\)\s*$/, "").trim()
+  }
+
   async function openEdit(event: any) {
+    const baseTitle = getBaseTitle(event.posts?.title || "")
+    const siblings = events.filter(e => e.id !== event.id && getBaseTitle(e.posts?.title || "") === baseTitle)
+    setSiblingEvents(siblings)
     setEditingId(event.id)
     setEditingPostId(event.post_id)
     setForm({
@@ -167,6 +176,78 @@ export default function EventsPage() {
     return dates
   }
 
+  async function saveCurrentEvent() {
+    setSaving(true)
+    await supabase.from("posts").update({ title: form.post_title, excerpt: form.post_excerpt, cover_image_url: form.cover_image_url || null }).eq("id", editingPostId!)
+    await supabase.from("events").update({
+      event_date: form.event_date, event_end_date: form.event_end_date || null,
+      location: form.location || null, address: form.address || null,
+      is_virtual: form.is_virtual, virtual_link: form.virtual_link || null,
+      max_attendees: form.max_attendees ? parseInt(form.max_attendees) : null,
+      is_rsvp_open: form.is_rsvp_open, cover_image_url: form.cover_image_url || null,
+    }).eq("id", editingId!)
+    await supabase.from("event_reminders").delete().eq("event_id", editingId!).eq("is_sent", false)
+    for (const rem of reminders) {
+      if (rem.is_sent) continue
+      await supabase.from("event_reminders").insert({
+        event_id: editingId!, reminder_type: rem.reminder_type,
+        timing_value: rem.timing_value, timing_unit: rem.timing_unit,
+        custom_sms: rem.custom_sms || null, custom_email_subject: rem.custom_email_subject || null,
+        custom_email_body: rem.custom_email_body || null, image_url: rem.image_url || null,
+        video_url: rem.video_url || null, send_at: calcSendAt(form.event_date, rem.timing_value, rem.timing_unit),
+      })
+    }
+    showToast("Event updated!")
+    setShowForm(false); setShowBulkEdit(false); setEditingId(null); setEditingPostId(null)
+    fetchEvents(); setSaving(false)
+  }
+
+  async function saveAllEvents() {
+    setSaving(true)
+    const sharedFields = {
+      excerpt: form.post_excerpt, cover_image_url: form.cover_image_url || null,
+    }
+    const sharedEventFields = {
+      location: form.location || null, address: form.address || null,
+      is_virtual: form.is_virtual, virtual_link: form.virtual_link || null,
+      max_attendees: form.max_attendees ? parseInt(form.max_attendees) : null,
+      is_rsvp_open: form.is_rsvp_open, cover_image_url: form.cover_image_url || null,
+    }
+    await supabase.from("posts").update({ title: form.post_title, ...sharedFields }).eq("id", editingPostId!)
+    await supabase.from("events").update({ event_date: form.event_date, event_end_date: form.event_end_date || null, ...sharedEventFields }).eq("id", editingId!)
+    await supabase.from("event_reminders").delete().eq("event_id", editingId!).eq("is_sent", false)
+    for (const rem of reminders) {
+      if (rem.is_sent) continue
+      await supabase.from("event_reminders").insert({
+        event_id: editingId!, reminder_type: rem.reminder_type, timing_value: rem.timing_value, timing_unit: rem.timing_unit,
+        custom_sms: rem.custom_sms || null, custom_email_subject: rem.custom_email_subject || null,
+        custom_email_body: rem.custom_email_body || null, image_url: rem.image_url || null, video_url: rem.video_url || null,
+        send_at: calcSendAt(form.event_date, rem.timing_value, rem.timing_unit),
+      })
+    }
+    for (const sib of siblingEvents) {
+      const sibDate = sib.event_date
+      const baseTitle = getBaseTitle(sib.posts?.title || "")
+      const suffix = baseTitle !== sib.posts?.title ? sib.posts?.title.replace(baseTitle, "").trim() : ""
+      const newTitle = form.post_title + (suffix ? " " + suffix : "")
+      await supabase.from("posts").update({ title: newTitle, ...sharedFields }).eq("id", sib.post_id)
+      await supabase.from("events").update(sharedEventFields).eq("id", sib.id)
+      await supabase.from("event_reminders").delete().eq("event_id", sib.id).eq("is_sent", false)
+      for (const rem of reminders) {
+        if (rem.is_sent) continue
+        await supabase.from("event_reminders").insert({
+          event_id: sib.id, reminder_type: rem.reminder_type, timing_value: rem.timing_value, timing_unit: rem.timing_unit,
+          custom_sms: rem.custom_sms || null, custom_email_subject: rem.custom_email_subject || null,
+          custom_email_body: rem.custom_email_body || null, image_url: rem.image_url || null, video_url: rem.video_url || null,
+          send_at: calcSendAt(sibDate, rem.timing_value, rem.timing_unit),
+        })
+      }
+    }
+    showToast(`Updated ${siblingEvents.length + 1} events!`)
+    setShowForm(false); setShowBulkEdit(false); setEditingId(null); setEditingPostId(null)
+    fetchEvents(); setSaving(false)
+  }
+
   async function handleSave() {
     if (!form.post_title.trim()) { showToast("Event title is required"); return }
     if (!form.event_date) { showToast("Event date is required"); return }
@@ -174,28 +255,13 @@ export default function EventsPage() {
     setSaving(true)
 
     if (editingId && editingPostId) {
-      await supabase.from("posts").update({ title: form.post_title, excerpt: form.post_excerpt, cover_image_url: form.cover_image_url || null }).eq("id", editingPostId)
-      await supabase.from("events").update({
-        event_date: form.event_date, event_end_date: form.event_end_date || null,
-        location: form.location || null, address: form.address || null,
-        is_virtual: form.is_virtual, virtual_link: form.virtual_link || null,
-        max_attendees: form.max_attendees ? parseInt(form.max_attendees) : null,
-        is_rsvp_open: form.is_rsvp_open, cover_image_url: form.cover_image_url || null,
-      }).eq("id", editingId)
-      await supabase.from("event_reminders").delete().eq("event_id", editingId).eq("is_sent", false)
-      for (const rem of reminders) {
-        if (rem.is_sent) continue
-        await supabase.from("event_reminders").insert({
-          event_id: editingId, reminder_type: rem.reminder_type,
-          timing_value: rem.timing_value, timing_unit: rem.timing_unit,
-          custom_sms: rem.custom_sms || null, custom_email_subject: rem.custom_email_subject || null,
-          custom_email_body: rem.custom_email_body || null, image_url: rem.image_url || null,
-          video_url: rem.video_url || null, send_at: calcSendAt(form.event_date, rem.timing_value, rem.timing_unit),
-        })
+      if (siblingEvents.length > 0 && !showBulkEdit) {
+        setShowBulkEdit(true)
+        setSaving(false)
+        return
       }
-      showToast("Event updated!")
-      setShowForm(false); setEditingId(null); setEditingPostId(null)
-      fetchEvents(); setSaving(false); return
+      await saveCurrentEvent()
+      return
     }
 
     const dates = generateRecurringDates(form.event_date, form.recurrence, form.recurrence_end, form.custom_days)
@@ -567,6 +633,30 @@ export default function EventsPage() {
         </div>
       )}
 
+      {showBulkEdit && (
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center",padding:"1rem"}}>
+          <div style={{background:"white",borderRadius:16,padding:"2rem",maxWidth:440,width:"100%",boxShadow:"0 16px 64px rgba(0,0,0,0.2)"}}>
+            <h2 style={{color:"#1a2f6e",fontSize:"1.15rem",fontWeight:800,margin:"0 0 0.5rem 0"}}>Edit Recurring Event</h2>
+            <p style={{color:"#6b7280",fontSize:"0.88rem",margin:"0 0 0.25rem 0"}}>This event is part of a series with <strong>{siblingEvents.length + 1} events</strong>.</p>
+            <p style={{color:"#9ca3af",fontSize:"0.82rem",margin:"0 0 1.25rem 0"}}>Would you like to apply your changes to just this event, or all events in the series?</p>
+            <div style={{display:"flex",flexDirection:"column",gap:"0.75rem"}}>
+              <button onClick={() => { setShowBulkEdit(false); saveAllEvents() }} disabled={saving}
+                style={{padding:"0.8rem",background:"#1a2f6e",color:"white",border:"none",borderRadius:8,fontWeight:700,cursor:saving?"not-allowed":"pointer",opacity:saving?0.7:1,fontFamily:"Barlow,system-ui,sans-serif",fontSize:"0.9rem"}}>
+                {saving ? "Updating..." : `Apply to all ${siblingEvents.length + 1} events`}
+              </button>
+              <button onClick={() => { setShowBulkEdit(false); saveCurrentEvent() }} disabled={saving}
+                style={{padding:"0.8rem",background:"white",color:"#1a2f6e",border:"2px solid #1a2f6e",borderRadius:8,fontWeight:700,cursor:saving?"not-allowed":"pointer",fontFamily:"Barlow,system-ui,sans-serif",fontSize:"0.9rem"}}>
+                {saving ? "Updating..." : "This event only"}
+              </button>
+              <button onClick={() => { setShowBulkEdit(false); setSaving(false) }}
+                style={{padding:"0.8rem",background:"white",color:"#6b7280",border:"1.5px solid #e5e7eb",borderRadius:8,fontWeight:700,cursor:"pointer",fontFamily:"Barlow,system-ui,sans-serif",fontSize:"0.9rem"}}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showNotifyConfirm && pendingNotify && (
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center",padding:"1rem"}}>
           <div style={{background:"white",borderRadius:16,padding:"2rem",maxWidth:420,width:"100%",boxShadow:"0 16px 64px rgba(0,0,0,0.2)"}}>
@@ -591,3 +681,8 @@ export default function EventsPage() {
     </div>
   )
 }
+
+
+
+
+
