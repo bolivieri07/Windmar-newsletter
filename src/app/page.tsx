@@ -497,7 +497,7 @@ export default function Home() {
               <div className="x-feed-title">Feed</div>
             </div>
             <div className="x-filter-bar">
-              {["all","announcement"].map(f => (
+              {["all","announcement","daily","weekly","giveaway","training"].map(f => (
                 <button key={f} className={"x-filter-btn " + (feedFilter===f?"active":"")} onClick={() => setFeedFilter(f)}>
                   {f==="all"?"For you":f.charAt(0).toUpperCase()+f.slice(1)}
                 </button>
@@ -764,6 +764,7 @@ export default function Home() {
     </div>
   )
 }
+
 
 
 

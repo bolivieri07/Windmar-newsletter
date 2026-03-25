@@ -7,6 +7,7 @@ export default function PostsPage() {
   const [posts, setPosts] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState("all")
+  const [typeFilter, setTypeFilter] = useState("all")
   const [deleting, setDeleting] = useState<string | null>(null)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [bulkAction, setBulkAction] = useState("")
@@ -14,7 +15,7 @@ export default function PostsPage() {
   const [toast, setToast] = useState("")
   const supabase = createClient()
 
-  useEffect(() => { fetchPosts() }, [filter])
+  useEffect(() => { fetchPosts() }, [filter, typeFilter])
 
   async function fetchPosts() {
     setLoading(true)
@@ -23,6 +24,7 @@ export default function PostsPage() {
       .select("id,title,status,post_type,published_at,created_at,is_featured,is_pinned,view_count")
       .order("created_at", { ascending: false })
     if (filter !== "all") query = query.eq("status", filter)
+    if (typeFilter !== "all") query = query.eq("post_type", typeFilter)
     const { data } = await query
     setPosts(data || [])
     setSelected(new Set())
@@ -146,6 +148,15 @@ export default function PostsPage() {
           </button>
         ))}
       </div>
+      <div style={{display:"flex",gap:"0.5rem",marginBottom:"1.25rem",flexWrap:"wrap",alignItems:"center"}}>
+        <span style={{fontSize:"0.78rem",fontWeight:700,color:"#9ca3af",textTransform:"uppercase",letterSpacing:"0.04em",marginRight:"0.25rem"}}>Type:</span>
+        {["all","announcement","daily","weekly","event","giveaway","training"].map(t => (
+          <button key={t} onClick={() => setTypeFilter(t)}
+            style={{padding:"0.5rem 1rem",borderRadius:20,fontSize:"0.82rem",fontWeight:700,cursor:"pointer",border:"1.5px solid",borderColor:typeFilter===t?"#1a2f6e":"#e5e7eb",background:typeFilter===t?"#1a2f6e":"white",color:typeFilter===t?"white":"#6b7280",transition:"all 0.15s",textTransform:"capitalize"}}>
+            {t}
+          </button>
+        ))}
+      </div>
 
       {selected.size > 0 && (
         <div style={{background:"#e8edf8",borderRadius:10,padding:"0.75rem 1.25rem",marginBottom:"1rem",display:"flex",alignItems:"center",gap:"1rem",flexWrap:"wrap"}}>
@@ -254,3 +265,7 @@ export default function PostsPage() {
     </div>
   )
 }
+
+
+
+
