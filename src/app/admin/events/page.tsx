@@ -378,8 +378,14 @@ export default function EventsPage() {
 
             {form.recurrence !== "none" && (
               <div>
-                <label style={labelStyle}>Repeat until *</label>
-                <input type="date" value={form.recurrence_end} onChange={e => setForm({ ...form, recurrence_end: e.target.value })} style={{ ...inputStyle, maxWidth: 250 }} />
+                <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", cursor: "pointer", fontWeight: 600, color: "#374151", fontSize: "0.88rem", marginBottom: "0.75rem" }}>
+                  <input type="checkbox" checked={form.no_end_date} onChange={e => { const checked = e.target.checked; const sm = new Date(); sm.setMonth(sm.getMonth() + 6); setForm({ ...form, no_end_date: checked, recurrence_end: checked ? sm.toISOString().split("T")[0] : "" }) }} style={{ width: 16, height: 16, accentColor: "#f89b24" }} />
+                  No end date (creates 6 months of events)
+                </label>
+                {!form.no_end_date && (<div>
+                  <label style={labelStyle}>Repeat until *</label>
+                  <input type="date" value={form.recurrence_end} onChange={e => setForm({ ...form, recurrence_end: e.target.value })} style={{ ...inputStyle, maxWidth: 250 }} />
+                </div>)}
               </div>
             )}
 
@@ -554,4 +560,5 @@ export default function EventsPage() {
     </div>
   )
 }
+
 
