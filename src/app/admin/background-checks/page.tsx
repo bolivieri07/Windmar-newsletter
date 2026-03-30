@@ -268,7 +268,7 @@ export default function BackgroundChecksPage() {
                 {!rec.files.selfie && !rec.files.id && !rec.files.ssn && <span style={{ fontSize: 12, color: "#9ca3af" }}>No files uploaded</span>}
               </div>)}
               {rec.doc_status === "completed" && <button onClick={() => handleDownloadDoc(rec)} style={{ padding: "6px 14px", borderRadius: 8, border: "2px solid #0369a1", background: "white", color: "#0369a1", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>View Contract</button>}
-              <button onClick={() => handleCopyLink(rec)} style={{ padding: "6px 14px", borderRadius: 8, border: copiedId === rec.id ? "2px solid #15803d" : "2px solid #6b7280", background: copiedId === rec.id ? "#f0fdf4" : "white", color: copiedId === rec.id ? "#15803d" : "#6b7280", fontWeight: 600, fontSize: 13, cursor: "pointer", transition: "all .2s" }}>{copiedId === rec.id ? "\u2713 Copied!" : "Copy Link"}</button>
+              {(rec.doc_status === "sent" || rec.doc_status === "viewed") && <button onClick={() => handleCopyLink(rec)} style={{ padding: "6px 14px", borderRadius: 8, border: copiedId === rec.id ? "2px solid #15803d" : "2px solid #6b7280", background: copiedId === rec.id ? "#f0fdf4" : "white", color: copiedId === rec.id ? "#15803d" : "#6b7280", fontWeight: 600, fontSize: 13, cursor: "pointer", transition: "all .2s" }}>{copiedId === rec.id ? "\u2713 Copied!" : "Copy Link"}</button>}
               {(rec.doc_status === "sent" || rec.doc_status === "viewed") && <button onClick={() => handleResendContract(rec)} disabled={resendingId === rec.id} style={{ padding: "6px 14px", borderRadius: 8, border: "2px solid #b45309", background: "white", color: "#b45309", fontWeight: 600, fontSize: 13, cursor: resendingId === rec.id ? "wait" : "pointer", opacity: resendingId === rec.id ? 0.6 : 1 }}>{resendingId === rec.id ? "Sending..." : "Resend"}</button>}
               {rec.hr_status === "approved" && !rec.shirt_given_at && <button onClick={() => updateFulfillment(rec, "shirt")} style={{ padding: "6px 14px", borderRadius: 8, border: "2px solid #7c3aed", background: "white", color: "#7c3aed", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>Give Shirt</button>}
               {rec.hr_status === "approved" && rec.shirt_given_at && !rec.badge_printed_at && <button onClick={() => updateFulfillment(rec, "badge")} style={{ padding: "6px 14px", borderRadius: 8, border: "2px solid #7c3aed", background: "white", color: "#7c3aed", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>Print Badge</button>}
@@ -316,6 +316,8 @@ export default function BackgroundChecksPage() {
     </div>
   )
 }
+
+
 
 
 
