@@ -120,7 +120,30 @@ export default function BackgroundChecksPage() {
     }
   }
 
-  function handleDownloadDoc(rec: BgCheck) { window.open(`https://app.gohighlevel.com/v2/location/eTTRenV5nD46gQbZ5A9E/payments/proposals-estimates/edit/${rec.ghl_document_id}`, "_blank"); showToast("Opening document for " + rec.contact_name) }
+  async function handleDownloadDoc(rec: BgCheck) {
+    showToast("Downloading document for " + rec.contact_name + "...")
+    try {
+      const res = await fetch(`/api/ghl/download-document?id=${rec.ghl_document_id}&name=${encodeURIComponent(rec.contact_name)}`)
+      if (res.headers.get("content-type")?.includes("pdf")) {
+        const blob = await res.blob()
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement("a")
+        a.href = url
+        a.download = `BG_Check_${rec.contact_name.replace(/[^a-zA-Z0-9 ]/g,"").replace(/\s+/g,"_")}.pdf`
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+        URL.revokeObjectURL(url)
+        showToast("Document downloaded!")
+      } else {
+        const data = await res.json()
+        console.log("Download response:", data)
+        showToast("Could not download PDF. Check console for details.")
+      }
+    } catch (err: any) {
+      showToast("Download failed: " + err.message)
+    }
+  }
 
   async function handleResendContract(rec: BgCheck) {
     if (!confirm("Resend contract to " + (rec.contact_name || rec.contact_email) + "?")) return
@@ -295,6 +318,7 @@ export default function BackgroundChecksPage() {
     </div>
   )
 }
+
 
 
 
