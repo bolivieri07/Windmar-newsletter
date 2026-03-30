@@ -120,7 +120,7 @@ export default function BackgroundChecksPage() {
     }
   }
 
-  function handleDownloadDoc(rec: BgCheck) { window.open(`https://link.windmarsolaracademy.com/widget/proposal/${rec.ghl_document_id}`, "_blank"); showToast("Opening document for " + rec.contact_name) }
+  function handleDownloadDoc(rec: BgCheck) { window.open(`https://app.gohighlevel.com/v2/location/eTTRenV5nD46gQbZ5A9E/payments/proposals-estimates/edit/${rec.ghl_document_id}`, "_blank"); showToast("Opening document for " + rec.contact_name) }
 
   async function handleResendContract(rec: BgCheck) {
     if (!confirm("Resend contract to " + (rec.contact_name || rec.contact_email) + "?")) return
@@ -134,7 +134,7 @@ export default function BackgroundChecksPage() {
   }
 
   async function handleCopyLink(rec: BgCheck) {
-    const link = `https://link.windmarsolaracademy.com/widget/proposal/${rec.ghl_document_id}`
+    const link = `https://app.gohighlevel.com/v2/location/eTTRenV5nD46gQbZ5A9E/payments/proposals-estimates/edit/${rec.ghl_document_id}`
     try { await navigator.clipboard.writeText(link) } catch { const ta = document.createElement("textarea"); ta.value = link; document.body.appendChild(ta); ta.select(); document.execCommand("copy"); document.body.removeChild(ta) }
     setCopiedId(rec.id); showToast("Signing link copied!"); setTimeout(() => setCopiedId(null), 2500)
   }
@@ -295,5 +295,6 @@ export default function BackgroundChecksPage() {
     </div>
   )
 }
+
 
 
