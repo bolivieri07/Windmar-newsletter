@@ -121,27 +121,25 @@ export default function BackgroundChecksPage() {
   }
 
   async function handleDownloadDoc(rec: BgCheck) {
-    showToast("Downloading document for " + rec.contact_name + "...")
+    if (!rec.contact_id) { showToast("No contact ID"); return }
+    showToast("Finding document link...")
     try {
-      const res = await fetch(`/api/ghl/download-document?id=${rec.ghl_document_id}&name=${encodeURIComponent(rec.contact_name)}`)
-      if (res.headers.get("content-type")?.includes("pdf")) {
-        const blob = await res.blob()
-        const url = URL.createObjectURL(blob)
-        const a = document.createElement("a")
-        a.href = url
-        a.download = `BG_Check_${rec.contact_name.replace(/[^a-zA-Z0-9 ]/g,"").replace(/\s+/g,"_")}.pdf`
-        document.body.appendChild(a)
-        a.click()
-        document.body.removeChild(a)
-        URL.revokeObjectURL(url)
-        showToast("Document downloaded!")
-      } else {
-        const data = await res.json()
-        console.log("Download response:", data)
-        showToast("Could not download PDF. Check console for details.")
+      const searchRes = await fetch(`/api/ghl/test?endpoint=/conversations/search?contactId=${rec.contact_id}`)
+      const searchData = await searchRes.json()
+      const conversations = searchData.conversations || []
+      if (conversations.length === 0) { showToast("No conversation found"); return }
+      const convId = conversations[0].id
+      const msgRes = await fetch(`/api/ghl/test?endpoint=/conversations/${convId}/messages`)
+      const msgData = await msgRes.json()
+      const messages = msgData.messages?.messages || msgData.messages || []
+      const docMsg = messages.find((m: any) => m.body && m.body.includes("sendlink.co/documents"))
+      if (docMsg) {
+        const match = docMsg.body.match(/https:\/\/sendlink\.co\/documents\/[^\s"]+/)
+        if (match) { window.open(match[0], "_blank"); showToast("Opening document for " + rec.contact_name); return }
       }
+      showToast("No document link found in conversation. Try Copy Link from GHL.")
     } catch (err: any) {
-      showToast("Download failed: " + err.message)
+      showToast("Error finding document: " + err.message)
     }
   }
 
@@ -269,7 +267,7 @@ export default function BackgroundChecksPage() {
                 {rec.files.ssn && <a href={rec.files.ssn.url} target="_blank" rel="noopener noreferrer" style={{ padding: "6px 12px", borderRadius: 8, background: "#eff6ff", color: "#1d4ed8", fontSize: 12, fontWeight: 600, textDecoration: "none" }}>SSN Card</a>}
                 {!rec.files.selfie && !rec.files.id && !rec.files.ssn && <span style={{ fontSize: 12, color: "#9ca3af" }}>No files uploaded</span>}
               </div>)}
-              {rec.doc_status === "completed" && <button onClick={() => handleDownloadDoc(rec)} style={{ padding: "6px 14px", borderRadius: 8, border: "2px solid #0369a1", background: "white", color: "#0369a1", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>Download Doc</button>}
+              {rec.doc_status === "completed" && <button onClick={() => handleDownloadDoc(rec)} style={{ padding: "6px 14px", borderRadius: 8, border: "2px solid #0369a1", background: "white", color: "#0369a1", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>View Contract</button>}
               <button onClick={() => handleCopyLink(rec)} style={{ padding: "6px 14px", borderRadius: 8, border: copiedId === rec.id ? "2px solid #15803d" : "2px solid #6b7280", background: copiedId === rec.id ? "#f0fdf4" : "white", color: copiedId === rec.id ? "#15803d" : "#6b7280", fontWeight: 600, fontSize: 13, cursor: "pointer", transition: "all .2s" }}>{copiedId === rec.id ? "\u2713 Copied!" : "Copy Link"}</button>
               {(rec.doc_status === "sent" || rec.doc_status === "viewed") && <button onClick={() => handleResendContract(rec)} disabled={resendingId === rec.id} style={{ padding: "6px 14px", borderRadius: 8, border: "2px solid #b45309", background: "white", color: "#b45309", fontWeight: 600, fontSize: 13, cursor: resendingId === rec.id ? "wait" : "pointer", opacity: resendingId === rec.id ? 0.6 : 1 }}>{resendingId === rec.id ? "Sending..." : "Resend"}</button>}
               {rec.hr_status === "approved" && !rec.shirt_given_at && <button onClick={() => updateFulfillment(rec, "shirt")} style={{ padding: "6px 14px", borderRadius: 8, border: "2px solid #7c3aed", background: "white", color: "#7c3aed", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>Give Shirt</button>}
@@ -318,6 +316,8 @@ export default function BackgroundChecksPage() {
     </div>
   )
 }
+
+
 
 
 
