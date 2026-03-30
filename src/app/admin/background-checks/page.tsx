@@ -120,7 +120,7 @@ export default function BackgroundChecksPage() {
     }
   }
 
-  function handleDownloadDoc(rec: BgCheck) { window.open(`/api/ghl/test?endpoint=/proposals/document/${rec.ghl_document_id}`, "_blank"); showToast("Opening document for " + rec.contact_name) }
+  function handleDownloadDoc(rec: BgCheck) { window.open(`https://link.windmarsolaracademy.com/widget/proposal/${rec.ghl_document_id}`, "_blank"); showToast("Opening document for " + rec.contact_name) }
 
   async function handleResendContract(rec: BgCheck) {
     if (!confirm("Resend contract to " + (rec.contact_name || rec.contact_email) + "?")) return
@@ -295,3 +295,4 @@ export default function BackgroundChecksPage() {
     </div>
   )
 }
+
