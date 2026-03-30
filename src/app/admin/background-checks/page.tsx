@@ -155,9 +155,27 @@ export default function BackgroundChecksPage() {
   }
 
   async function handleCopyLink(rec: BgCheck) {
-    const link = `https://app.gohighlevel.com/v2/location/eTTRenV5nD46gQbZ5A9E/payments/proposals-estimates/edit/${rec.ghl_document_id}`
-    try { await navigator.clipboard.writeText(link) } catch { const ta = document.createElement("textarea"); ta.value = link; document.body.appendChild(ta); ta.select(); document.execCommand("copy"); document.body.removeChild(ta) }
-    setCopiedId(rec.id); showToast("Signing link copied!"); setTimeout(() => setCopiedId(null), 2500)
+    if (!rec.contact_id) { showToast("No contact ID"); return }
+    showToast("Finding document link...")
+    try {
+      const searchRes = await fetch(`/api/ghl/test?endpoint=/conversations/search?contactId=${rec.contact_id}`)
+      const searchData = await searchRes.json()
+      const conversations = searchData.conversations || []
+      if (conversations.length === 0) { showToast("No conversation found"); return }
+      const convId = conversations[0].id
+      const msgRes = await fetch(`/api/ghl/test?endpoint=/conversations/${convId}/messages`)
+      const msgData = await msgRes.json()
+      const messages = msgData.messages?.messages || msgData.messages || []
+      let docLink = ""
+      for (const msg of messages) {
+        const body = msg.body || ""
+        const match = body.match(/https:\/\/sendlink\.co\/[^\s"<]+/)
+        if (match) { docLink = match[0]; break }
+      }
+      if (!docLink) { showToast("No document link found in conversation"); return }
+      try { await navigator.clipboard.writeText(docLink) } catch { const ta = document.createElement("textarea"); ta.value = docLink; document.body.appendChild(ta); ta.select(); document.execCommand("copy"); document.body.removeChild(ta) }
+      setCopiedId(rec.id); showToast("Document link copied!"); setTimeout(() => setCopiedId(null), 2500)
+    } catch (err: any) { showToast("Error: " + err.message) }
   }
 
   async function openChat(rec: BgCheck) {
@@ -316,6 +334,7 @@ export default function BackgroundChecksPage() {
     </div>
   )
 }
+
 
 
 
