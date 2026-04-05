@@ -7,6 +7,20 @@ export const metadata: Metadata = {
   manifest: "/manifest.json",
   themeColor: "#1a2f6e",
   viewport: "width=device-width, initial-scale=1, maximum-scale=1",
+  icons: {
+    icon: "https://assets.cdn.filesafe.space/eTTRenV5nD46gQbZ5A9E/media/6304e4828eb5d962dab34923.png",
+    apple: "https://assets.cdn.filesafe.space/eTTRenV5nD46gQbZ5A9E/media/6304e4828eb5d962dab34923.png",
+  },
+  openGraph: {
+    title: "Windmar Solar Academy",
+    description: "We Train You. We Value You. We Promote You.",
+    images: [
+      {
+        url: "https://assets.cdn.filesafe.space/eTTRenV5nD46gQbZ5A9E/media/6304e4828eb5d962dab34923.png",
+        alt: "Windmar Solar Academy",
+      },
+    ],
+  },
 }
 
 export default function RootLayout({
